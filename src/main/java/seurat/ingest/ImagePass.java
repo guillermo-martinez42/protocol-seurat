@@ -33,6 +33,10 @@ final class ImagePass {
     }
 
     void run(PngReader reader) throws Exception {
+        if (top == 0) {
+            runTopZero(reader);
+            return;
+        }
         int paddedW = IngestJob.padTo(width, top);
         int paddedH = IngestJob.padTo(height, top);
         Accumulator[] acc = new Accumulator[top];
@@ -63,13 +67,13 @@ final class ImagePass {
             acc[0].addRow(row % 256, yuv[0], yuv[1], yuv[2], paddedW);
             row++;
             if (acc[0].full()) {
-                drain(0, acc, pool, tasks, seed, drainCounts).drain();
+                new Drain(0, top, acc, store, pool, tasks, seed, drainCounts).drain();
             }
         }
         for (int stratum = 0; stratum < top; stratum++) {
             replicate(acc[stratum]);
             if (acc[stratum].rows > 0) {
-                drain(stratum, acc, pool, tasks, seed, drainCounts).drain();
+                new Drain(stratum, top, acc, store, pool, tasks, seed, drainCounts).drain();
             }
         }
         for (Future<?> task : tasks) {
@@ -79,19 +83,32 @@ final class ImagePass {
         writeSeed(seed, paddedW >> top, paddedH >> top);
     }
 
+    private void runTopZero(PngReader reader) throws Exception {
+        List<short[][]> seed = new ArrayList<>();
+        int[][] yuv = new int[3][width];
+        int[][] band;
+        while ((band = reader.next()) != null) {
+            for (int[] rgbRow : band) {
+                YCoCgR.forwardRow(rgbRow, 0, yuv[0], yuv[1], yuv[2], 0, width);
+                short[][] r = new short[3][width];
+                for (int c = 0; c < 3; c++) {
+                    for (int x = 0; x < width; x++) r[c][x] = (short) yuv[c][x];
+                }
+                seed.add(r);
+            }
+            catalog.progress(id, (int) (reader.fraction() * 100));
+        }
+        writeSeed(seed, width, height);
+    }
+
     private int feed(Accumulator[] acc, int[][] yuv, int paddedW, int row,
             ExecutorService pool, List<Future<?>> tasks, List<short[][]> seed,
             int[] drainCounts) {
         acc[0].addRow(row % 256, yuv[0], yuv[1], yuv[2], paddedW);
         if (acc[0].full()) {
-            drain(0, acc, pool, tasks, seed, drainCounts).drain();
+            new Drain(0, top, acc, store, pool, tasks, seed, drainCounts).drain();
         }
         return row + 1;
-    }
-
-    private Drain drain(int stratum, Accumulator[] acc, ExecutorService pool,
-            List<Future<?>> tasks, List<short[][]> seed, int[] drainCounts) {
-        return new Drain(stratum, top, acc, store, pool, tasks, seed, drainCounts);
     }
 
     /** Border-replicate the last row until the accumulator holds 256 rows. */

@@ -54,14 +54,15 @@ final class SketchBuilder {
             }
             reader.dispose();
             int stratum = Math.max(0, top - 3);
-            int cw = sw % 2 == 0 ? sw : sw + 1;
-            e = padWidth(e, sw, sh, cw);
-            sw = cw;
-            if (sh % 2 != 0) {
-                e = padHeight(e, sw, sh);
-                sh++;
-            }
             while (stratum < top) {
+                if (sw % 2 != 0) {
+                    e = padWidth(e, sw, sh, sw + 1);
+                    sw++;
+                }
+                if (sh % 2 != 0) {
+                    e = padHeight(e, sw, sh);
+                    sh++;
+                }
                 int[][] sig = means(e, sw, sh);
                 if (stratum >= top - 3) {
                     paintLevel(sig, sw / 2, sh / 2, stratum, store);

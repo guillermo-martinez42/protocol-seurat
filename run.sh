@@ -11,4 +11,4 @@ if [ -f client/package.json ] && { command -v pnpm >/dev/null || command -v npm 
 fi
 
 javac -d target/classes $(find src/main/java -name '*.java')
-exec java -cp target/classes seurat.SeuratServer "$@"
+exec java -Xmx2G -cp target/classes seurat.SeuratServer "$@"

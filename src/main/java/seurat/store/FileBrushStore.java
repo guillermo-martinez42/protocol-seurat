@@ -74,23 +74,26 @@ public final class FileBrushStore implements BrushStore {
         }
     }
 
+    private Path seedPath() {
+        Path p = dir.resolve("semilla.bin");
+        Path ed1 = dir.resolve("ed1/semilla.bin");
+        return !Files.exists(p) && Files.exists(ed1) ? ed1 : p;
+    }
+
     @Override
     public byte[][] bands(BrushId p, int b0, int b1) throws IOException {
         if (p.stratum() == SeuratConstants.SEED_STRATUM) {
-            byte[] seed = Files.readAllBytes(dir.resolve("semilla.bin"));
+            byte[] seed = Files.readAllBytes(seedPath());
             return new byte[][]{java.util.Arrays.copyOfRange(seed, 4, seed.length)};
         }
         IndexEntry e = entry(p);
         if (e.isMissing()) {
             throw new IOException("brush ausente " + p);
         }
-        byte[][] out = new byte[b1 - b0][];
         if (e.isEmpty()) {
-            for (int i = 0; i < out.length; i++) {
-                out[i] = new byte[0];
-            }
-            return out;
+            return new byte[b1 - b0][0];
         }
+        byte[][] out = new byte[b1 - b0][];
         try (FileChannel ch = FileChannel.open(pincPath(p.stratum()), StandardOpenOption.READ)) {
             for (int i = b0; i < b1; i++) {
                 long from = i == 0 ? 0 : e.ends()[i - 1];
@@ -115,7 +118,7 @@ public final class FileBrushStore implements BrushStore {
     @Override
     public void copy(BrushId p, int b0, int b1, OutputStream out) throws IOException {
         if (p.stratum() == SeuratConstants.SEED_STRATUM) {
-            byte[] seed = Files.readAllBytes(dir.resolve("semilla.bin"));
+            byte[] seed = Files.readAllBytes(seedPath());
             out.write(seed, 4, seed.length - 4);
             return;
         }
@@ -127,7 +130,7 @@ public final class FileBrushStore implements BrushStore {
     @Override
     public long bytes(BrushId p, int b0, int b1) throws IOException {
         if (p.stratum() == SeuratConstants.SEED_STRATUM) {
-            return Files.size(dir.resolve("semilla.bin")) - 4;
+            return Files.size(seedPath()) - 4;
         }
         IndexEntry e = entry(p);
         if (e.isMissing()) {

@@ -71,9 +71,20 @@ final class Drain {
                 store.append(level, col, row, bb.bands(), bb.crcs());
                 return null;
             }));
+            throttle(tasks);
         }
         a.clear();
         pushUp(ps, w2);
+    }
+
+    private static void throttle(List<Future<?>> tasks) {
+        while (tasks.size() >= 32) {
+            try {
+                tasks.remove(0).get();
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
     }
 
     private void pushUp(int[][] ps, int w2) {

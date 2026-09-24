@@ -3,6 +3,8 @@ package seurat.ingest;
 import java.nio.file.Path;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
+import seurat.observe.AuditLog;
+import seurat.observe.Log;
 import seurat.proto.ProtoCodes;
 import seurat.store.FileBrushStore;
 import seurat.store.WorkMeta;
@@ -32,12 +34,14 @@ public final class IngestJob implements Runnable {
     @Override
     public void run() {
         try {
+            Log.info("ingest", "Ingest started for '" + id + "' [" + name + "] from " + master.getFileName());
             catalog.register(new WorkRecord(new WorkMeta(id, name, 0, 0, 256, 0,
                     ProtoCodes.ST_RECIBIENDO, 1, 0, 2)));
             try (PngReader reader = new PngReader(master)) {
                 int w = reader.width();
                 int h = reader.height();
                 int top = topLevels(w, h);
+                Log.info("ingest", "Work '" + id + "' dimensions: " + w + "x" + h + ", strata=" + (top + 1));
                 WorkRecord work = catalog.get(id);
                 work.meta = new WorkMeta(id, name, w, h, 256, top + 1,
                         ProtoCodes.ST_BOCETO, 1, 0, 2);
@@ -45,14 +49,18 @@ public final class IngestJob implements Runnable {
                 SketchBuilder.build(master, ed1, top);
                 ed1.close();
                 catalog.sketch(id, ed1, ProtoCodes.ST_BOCETO, 1);
+                Log.info("ingest", "Work '" + id + "' ed1 sketch generated (ST_BOCETO)");
                 FileBrushStore ed2 = store(top, w, h, 2);
                 new ImagePass(id, catalog, ed2, top, w, h, worksDir).run(reader);
                 ed2.close();
                 catalog.sketch(id, ed2, ProtoCodes.ST_LISTA, 2);
                 catalog.list(id);
+                Log.info("ingest", "Work '" + id + "' ed2 pyramid completed, work ready (ST_LISTA)");
             }
             onReady.run();
         } catch (Exception ex) {
+            Log.error("ingest", "Ingest failed for '" + id + "': " + ex.getMessage(), ex);
+            AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
             WorkRecord work = catalog.get(id);
             if (work != null) {
                 catalog.sketch(id, work.store, ProtoCodes.ST_FALLIDA, work.meta.edition());

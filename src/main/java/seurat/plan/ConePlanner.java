@@ -18,6 +18,9 @@ public final class ConePlanner {
     public static ConePlan plan(MsgGaze.Gaze gaze, Concession concession, BookView book,
             seurat.store.WorkMeta meta, double share, long queueMs) {
         int top = meta.strata() - 1;
+        if (top <= 0) {
+            return new ConePlan(List.of(), 0);
+        }
         long width = meta.width();
         long height = meta.height();
         double ideal = log2(Math.max((gaze.x1() - gaze.x0()) / (double) gaze.vw(),

@@ -10,6 +10,7 @@ import seurat.concession.GrantController;
 import seurat.config.SeuratConfig;
 import seurat.ingest.IngestJob;
 import seurat.observe.AuditLog;
+import seurat.observe.Log;
 import seurat.proto.ProtoCodes;
 import seurat.session.Canvas;
 import seurat.session.Concession;
@@ -34,13 +35,15 @@ public final class MasterIntake {
     }
 
     public void offer(String id, Path file) {
+        Log.info("ingest", "Queueing ingest for '" + id + "' (" + file.getFileName() + ")");
         ingest.execute(() -> launch(id, file));
     }
 
     private void launch(String id, Path file) {
         try {
             if (file.toString().endsWith(".zip")) {
-                for (Path img : unzip(file)) {
+                Log.info("ingest", "Unpacking zip archive: " + file.getFileName());
+                for (Path img : ZipUnpacker.unpack(file, this::isLista)) {
                     String name = img.getFileName().toString().replaceAll("\\.[^.]+$", "");
                     new IngestJob(name, name, img, config.works, catalog,
                             () -> substitute(name)).run();
@@ -48,45 +51,21 @@ public final class MasterIntake {
                 return;
             }
             String name = id.replaceAll("\\.[^.]+$", "");
+            if (isLista(name)) {
+                Log.info("ingest", "Work already completed, skipping: " + name);
+                return;
+            }
             new IngestJob(name, name, file, config.works, catalog,
                     () -> substitute(name)).run();
         } catch (Exception ex) {
+            Log.error("ingest", "Ingest failed for " + id + ": " + ex.getMessage(), ex);
             AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
         }
     }
 
-    private static java.util.List<Path> unzip(Path zip) throws Exception {
-        Path dir = zip.getParent().resolve(zip.getFileName() + ".d");
-        Files.createDirectories(dir);
-        java.util.List<Path> list = new java.util.ArrayList<>();
-        try (var in = new java.util.zip.ZipFile(zip.toFile())) {
-            var entries = in.entries();
-            while (entries.hasMoreElements()) {
-                var entry = entries.nextElement();
-                if (entry.isDirectory()) {
-                    continue;
-                }
-                String base = Path.of(entry.getName()).getFileName().toString();
-                String lower = base.toLowerCase();
-                if (!lower.endsWith(".png") && !lower.endsWith(".jpg") && !lower.endsWith(".tif")) {
-                    continue;
-                }
-                Path out = dir.resolve(base);
-                if (!Files.exists(out) || Files.size(out) != entry.getSize()) {
-                    try (var is = in.getInputStream(entry)) {
-                        Files.copy(is, out, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-                    }
-                }
-                list.add(out);
-            }
-        }
-        if (list.isEmpty()) {
-            throw new java.io.IOException("no images in zip");
-        }
-        list.sort(java.util.Comparator.comparingLong(p -> {
-            try { return Files.size(p); } catch (Exception e) { return 0L; }
-        }));
-        return list;
+    private boolean isLista(String id) {
+        WorkRecord r = catalog.get(id);
+        return r != null && r.meta != null && r.meta.state() == ProtoCodes.ST_LISTA;
     }
 
     /** Edition swap: point canvases at ed2, re-issue concession, replan without withdrawing. */
@@ -95,6 +74,7 @@ public final class MasterIntake {
         if (work == null) {
             return;
         }
+        Log.info("ingest", "Swapping edition for work '" + id + "' across active canvases");
         for (Session session : sessions.all()) {
             for (Canvas canvas : session.canvases().values()) {
                 if (!canvas.workId().equals(id)) continue;
@@ -115,6 +95,7 @@ public final class MasterIntake {
                 var watcher = config.inbox.getFileSystem().newWatchService();
                 config.inbox.register(watcher,
                         java.nio.file.StandardWatchEventKinds.ENTRY_CREATE);
+                Log.info("ingest", "Inbox file watcher active on " + config.inbox.toAbsolutePath());
                 try (DirectoryStream<Path> existing = Files.newDirectoryStream(config.inbox)) {
                     for (Path file : existing) {
                         offerIfMaster(file.getFileName().toString());
@@ -128,6 +109,7 @@ public final class MasterIntake {
                     key.reset();
                 }
             } catch (Exception ex) {
+                Log.error("ingest", "Inbox watcher error: " + ex.getMessage(), ex);
                 AuditLog.alert("inbox watch failed: " + ex.getMessage());
             }
         });
@@ -137,6 +119,7 @@ public final class MasterIntake {
         String lower = name.toLowerCase();
         if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
                 || lower.endsWith(".zip")) {
+            Log.info("ingest", "Detected master image in inbox: " + name);
             offer(name, config.inbox.resolve(name));
         }
     }
