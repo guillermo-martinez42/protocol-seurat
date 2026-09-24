@@ -33,7 +33,13 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
   useEffect(() => {
     miradaInit.current = false;
     setView(null);
-    if (seurat.client && seurat.bienvenida) seurat.client.openObra(id);
+    if (seurat.client && seurat.bienvenida) {
+      seurat.closeWork();
+      seurat.client.openObra(id);
+    }
+    return () => {
+      seurat.closeWork();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, attempt, seurat.bienvenida]);
 

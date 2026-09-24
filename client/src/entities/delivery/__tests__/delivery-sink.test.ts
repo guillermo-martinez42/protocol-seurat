@@ -176,6 +176,8 @@ describe('DeliverySink', () => {
     sink.applyRenovar([10], 4, 120, () => 1000);
     expect(sink.book.byDelivery.get(10)?.expires).toBe(1000 + 120000);
     expect(sink.renewThrough).toBe(4);
+    expect(client.sentRecibo.length).toBe(1);
+    expect(client.sentRecibo[0]?.renewThrough).toBe(4);
 
     const inv = sink.inventory(20);
     expect(inv.brushCount).toBe(1);

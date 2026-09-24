@@ -20,6 +20,7 @@ export interface SeuratState {
   sink: DeliverySink | null;
   gazeService: GazeSender | null;
   retryConnect(): void;
+  closeWork(): void;
 }
 
 const Ctx = createContext<SeuratState | null>(null);
@@ -64,6 +65,11 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       onAbierta: (a) => {
         if (!alive) return;
         previewRef.current?.pause();
+        if (sinkRef.current && sinkRef.current.handle !== a.handle) {
+          const prev = sinkRef.current.handle;
+          sinkRef.current.dispose();
+          clientRef.current?.closeHandle(prev);
+        }
         setAbierta(a);
         const sink = new DeliverySink(
           a.handle,
@@ -82,21 +88,26 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
         previewRef.current?.onError(id);
       },
       onConcesion: (c) => {
+        if (sinkRef.current && sinkRef.current.handle !== c.handle) return;
         concessionRef.current = c;
         if (alive) setConcesion(c);
       },
       onPlan: (p) => {
+        if (sinkRef.current?.handle !== p.handle) return;
         if (alive) setPlan(p);
         if (p.event === 2) sinkRef.current?.applyPlanCanceladas(p.cancelled);
       },
       onRaspar: (r) => {
+        if (sinkRef.current?.handle !== r.handle) return;
         sinkRef.current?.applyRaspar(r, () => performance.now());
         if (alive) setPaintTick((t) => t + 1);
       },
       onRenovar: (r) => {
+        if (sinkRef.current?.handle !== r.handle) return;
         sinkRef.current?.applyRenovar(r.ranges, r.order, r.leaseS, () => performance.now());
       },
       onAuditar: (a) => {
+        if (sinkRef.current?.handle !== a.handle) return;
         const inv = sinkRef.current?.inventory(a.through);
         if (inv && clientRef.current) {
           clientRef.current.sendInventory(a.handle, a.order, a.through, inv.brushCount, inv.kib, inv.ranges);
@@ -175,11 +186,24 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
     );
   };
 
+  const closeWork = (): void => {
+    if (sinkRef.current) {
+      const h = sinkRef.current.handle;
+      sinkRef.current.dispose();
+      sinkRef.current = null;
+      clientRef.current?.closeHandle(h);
+    }
+    setAbierta(null);
+    setConcesion(null);
+    setPlan(null);
+    previewRef.current?.resume();
+  };
+
   const value = useMemo<SeuratState>(
     () => ({
       status, works, bienvenida, opened, concession, plan, lastError, paintTick,
       client: clientRef.current, sink: sinkRef.current, gazeService: miradasRef.current,
-      retryConnect,
+      retryConnect, closeWork,
     }),
     [status, works, bienvenida, opened, concession, plan, lastError, paintTick],
   );

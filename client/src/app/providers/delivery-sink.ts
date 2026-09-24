@@ -28,7 +28,7 @@ export class DeliverySink {
   private settledBelow: number | null = null;
 
   constructor(
-    private handle: number,
+    public readonly handle: number,
     private client: () => SessionClient | null,
     private maxKiB: () => number,
     private maxBrushes: () => number,
@@ -177,6 +177,7 @@ export class DeliverySink {
       const rec = this.book.byDelivery.get(n);
       if (rec) rec.expires = t;
     }
+    this.flushRecibo();
   }
 
   inventory(through: number): { brushCount: number; kib: number; ranges: number[] } {
@@ -254,7 +255,7 @@ export class DeliverySink {
   private flushRecibo(): void {
     const q = this.book.pendingReceipt;
     this.book.pendingReceipt = [];
-    if (q.length === 0) return;
+    if (q.length === 0 && this.renewThrough === 0) return;
     for (const n of q) this.book.inFlight.delete(n);
     this.client()?.sendRecibo(this.handle, [...q].sort((a, b) => a - b), Math.round(this.queueMs), this.libre(), this.renewThrough);
   }
