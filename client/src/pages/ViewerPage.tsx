@@ -13,6 +13,7 @@ import { stepIndex, counterLabel } from '@/features/navigate-work';
 import { workDims, workMp, workTitle } from '@/entities/work/types';
 import { fmtPct } from '@/shared/lib/zoom';
 import { Icon } from '@/shared/ui/Icon';
+import { pillStyle } from '@/features/toggle-loupe';
 
 const DOT_THRESHOLD = 1200;
 const MAX_ZOOM = 64;
@@ -96,6 +97,19 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
     goGallery();
   };
 
+  const handleToggleDots = (): void => {
+    const currentS = view?.s ?? 1;
+    const th = DOT_THRESHOLD / 100;
+    if (currentS < th) {
+      patchUi({ dots: true });
+      api.current?.zoomTo(16);
+    } else {
+      patchUi({ dots: !ui.dots });
+    }
+  };
+
+  const dotsActive = inDots || (ui.dots && (view?.s ?? 0) >= DOT_THRESHOLD / 100);
+
   return (
     <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', background: '#0D0E13', color: '#E3E1E9', fontFamily: "'Roboto Flex',system-ui,sans-serif", userSelect: 'none' }}>
       <ViewerChrome
@@ -112,7 +126,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         apiRef={api}
         actions={{
           onToggleLoupe: () => patchUi({ loupe: !ui.loupe }),
-          onToggleDots: () => patchUi({ dots: !ui.dots }),
+          onToggleDots: handleToggleDots,
           onToggleInfo: () => patchUi({ info: !ui.info }),
           onPrev: () => go(-1),
           onNext: () => go(1),
@@ -194,21 +208,25 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         frac={frac}
         menu={ui.menu}
         presets={presets}
-        loupe={{ bg: ui.loupe ? '#B8C4FF' : 'transparent', fg: ui.loupe ? '#1F2D6F' : '#E3E1E9', r: ui.loupe ? '16px' : '24px' }}
-        dots={{ bg: ui.dots ? '#B8C4FF' : 'transparent', fg: ui.dots ? '#1F2D6F' : '#E3E1E9', r: ui.dots ? '16px' : '24px' }}
+        loupe={pillStyle(ui.loupe)}
+        dots={pillStyle(dotsActive)}
         onZoomIn={() => api.current?.zoomTo((view?.s ?? 1) * 1.6)}
         onZoomOut={() => api.current?.zoomTo((view?.s ?? 1) / 1.6)}
         onSlide={(f) => api.current?.slideTo(f)}
         onToggleMenu={() => patchUi({ menu: !ui.menu })}
         onPreset={(p) => {
-          if (p.zoom === null) api.current?.fit(false);
-          else api.current?.zoomTo(p.zoom / 100);
+          if (p.zoom === null) {
+            api.current?.fit(false);
+          } else {
+            api.current?.zoomTo(p.zoom / 100);
+            if (p.zoom >= DOT_THRESHOLD) patchUi({ dots: true });
+          }
           patchUi({ menu: false });
         }}
         onFit={() => api.current?.fit(false)}
         onOneToOne={() => api.current?.zoomTo(1)}
         onToggleLoupe={() => patchUi({ loupe: !ui.loupe })}
-        onToggleDots={() => patchUi({ dots: !ui.dots })}
+        onToggleDots={handleToggleDots}
       />
 
       <ViewerMinimap api={api} view={view} iw={iw} ih={ih} ready={ready} sink={seurat.sink} paintTick={seurat.paintTick} />

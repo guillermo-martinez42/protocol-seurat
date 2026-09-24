@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { clamp } from '@/shared/lib/clamp';
-import { hash3 } from '@/shared/lib/hash3';
+import { drawPointillism, samplePixelHex } from './pointillism';
 import { logFrac } from '@/shared/lib/zoom';
 import { applyFitImmediate, fitTarget } from '@/features/fit-view';
 import { flingTarget, panBy } from '@/features/pan-view';
@@ -76,7 +76,8 @@ export function ViewerChrome(props: Props): JSX.Element {
     ih: props.ih,
     mouse: null as { mx: number; my: number } | null,
     uiKey: '',
-    grids: new Map<number, { w: number; h: number; d: Uint8ClampedArray }>(),
+    scratchCanvas: document.createElement('canvas'),
+    scratch1x1: document.createElement('canvas'),
   });
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -173,25 +174,6 @@ export function ViewerChrome(props: Props): JSX.Element {
       return out;
     }
 
-    function gridFor(b: BrushGeom): { w: number; h: number; d: Uint8ClampedArray } | null {
-      const hit = st.grids.get(b.delivery);
-      if (hit) return hit;
-      if (st.grids.size > 64) st.grids.clear();
-      try {
-        const c = document.createElement('canvas');
-        c.width = 32;
-        c.height = 32;
-        const g = c.getContext('2d', { willReadFrequently: true });
-        if (!g) return null;
-        g.drawImage(b.bmp, 0, 0, 32, 32);
-        const d = g.getImageData(0, 0, 32, 32).data;
-        const e = { w: 32, h: 32, d };
-        st.grids.set(b.delivery, e);
-        return e;
-      } catch {
-        return null;
-      }
-    }
 
     function bg(): void {
       if (!ctx) return;
@@ -230,32 +212,12 @@ export function ViewerChrome(props: Props): JSX.Element {
       }
       ctx.globalAlpha = 1;
       if (dotsOn) {
-        const grow = 0.4 + 0.6 * f;
-        for (const b of list) {
-          if (b.s === 10) continue;
-          const g = gridFor(b);
-          if (!g) continue;
-          for (let gy = 0; gy < g.h; gy++) {
-            for (let gx = 0; gx < g.w; gx++) {
-              const gi = (gy * g.w + gx) * 4;
-              const step = b.w / g.w;
-              const ix = b.x + gx * step + step / 2;
-              const iy = b.y + gy * step + step / 2;
-              let cx = tx + ix * s;
-              let cy = ty + iy * s;
-              let rad = s * step * 0.45;
-              const [h1, h2, h3] = hash3(Math.round(ix), Math.round(iy));
-              cx += (h1 - 0.5) * s * step * 0.24;
-              cy += (h2 - 0.5) * s * step * 0.24;
-              rad = s * step * (0.33 + 0.15 * h3);
-              if (cx + rad < cx0 || cx - rad > cx1 || cy + rad < cy0 || cy - rad > cy1) continue;
-              ctx.fillStyle = 'rgb(' + g.d[gi] + ',' + g.d[gi + 1] + ',' + g.d[gi + 2] + ')';
-              ctx.beginPath();
-              ctx.arc(cx, cy, rad * grow, 0, 6.2832);
-              ctx.fill();
-            }
-          }
-        }
+        drawPointillism(ctx, {
+          tx, ty, s, cx0, cy0, cx1, cy1,
+          iw: p.iw, ih: p.ih, f,
+          brushes: list,
+          scratchCanvas: st.scratchCanvas,
+        });
       } else if (s >= 16) {
         const x0 = Math.max(0, Math.floor((cx0 - tx) / s));
         const y0 = Math.max(0, Math.floor((cy0 - ty) / s));
@@ -372,19 +334,7 @@ export function ViewerChrome(props: Props): JSX.Element {
         const ix = Math.floor((st.mouse.mx - v.tx) / v.s);
         const iy = Math.floor((st.mouse.my - v.ty) / v.s);
         if (ix >= 0 && iy >= 0 && ix < p.iw && iy < p.ih) {
-          let hex: string | null = null;
-          for (const b of brushes()) {
-            if (ix >= b.x && ix < b.x + b.w && iy >= b.y && iy < b.y + b.h) {
-              const g = gridFor(b);
-              if (g) {
-                const gx = clamp(Math.floor(((ix - b.x) / b.w) * g.w), 0, g.w - 1);
-                const gy = clamp(Math.floor(((iy - b.y) / b.h) * g.h), 0, g.h - 1);
-                const gi = (gy * g.w + gx) * 4;
-                hex = '#' + [g.d[gi], g.d[gi + 1], g.d[gi + 2]].map((n) => (n ?? 0).toString(16).padStart(2, '0')).join('').toUpperCase();
-              }
-              break;
-            }
-          }
+          const hex = samplePixelHex(brushes(), ix, iy, st.scratch1x1);
           px = { x: ix.toLocaleString('en-US'), y: iy.toLocaleString('en-US'), hex };
         }
       }
