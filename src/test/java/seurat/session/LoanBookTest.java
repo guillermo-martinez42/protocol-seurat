@@ -10,6 +10,7 @@ public final class LoanBookTest {
         annotateBands();
         expectedScrape();
         retainOnly();
+        pruneExpired();
         System.out.println("LoanBookTest OK");
     }
 
@@ -58,5 +59,17 @@ public final class LoanBookTest {
         book.retainOnly(10, keep.build());
         TestKit.check(book.size() == 5 && book.numbersThrough(10).equals(keep.build()),
                 "retainOnly keeps [1,5]");
+    }
+
+    private static void pruneExpired() {
+        LoanBook book = new LoanBook();
+        book.log(new BrushId(1, 1, 0), 0, 2, 100, 1);
+        book.log(new BrushId(1, 2, 0), 0, 2, 100, 1);
+        long now = 10_000_000_000L;
+        book.acknowledge(Ranges.of(1), now, 5_000_000_000L, 0);
+        book.acknowledge(Ranges.of(2), now, 20_000_000_000L, 0);
+        Ranges pruned = book.pruneExpired(16_000_000_000L);
+        TestKit.check(pruned.contains(1) && !pruned.contains(2), "pruned 1 only");
+        TestKit.check(!book.contains(1) && book.contains(2), "book retained 2");
     }
 }

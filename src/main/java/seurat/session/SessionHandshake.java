@@ -1,12 +1,15 @@
 package seurat.session;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import seurat.config.SeuratConstants;
 import seurat.proto.FatalProtocol;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
+import seurat.proto.MsgGaze;
 import seurat.proto.MsgHandshake;
 import seurat.proto.ProtoCodes;
 
@@ -46,18 +49,28 @@ final class SessionHandshake {
         Session session = new Session(sessions.reserveId(), token.principal(),
                 token.role(), token.memMib(), caps, ref, sessions.newTicket());
         sessions.add(session);
+        List<Long> resumed = List.of();
         if (hello.resume() != null) {
-            resume(session, hello.resume());
+            resumed = resume(session, hello.resume());
         }
         var welcome = new MsgHandshake.Welcome(1, caps, session.id(),
                 SeuratConstants.BRUSH_SIDE, SeuratConstants.LEASE_S,
                 SeuratConstants.HEARTBEAT_S, SeuratConstants.MAX_IN_FLIGHT, sessionMax,
-                session.ticket(), java.util.List.of());
+                session.ticket(), resumed);
         Easel.send(ref, FrameType.BIENVENIDA, welcome.encode());
+        for (long h : resumed) {
+            Canvas c = session.canvases().get(h);
+            if (c != null) {
+                Concession con = c.concession();
+                var msg = new MsgGaze.ConcessionMessage(h, con.epoch(), con.minStratum(),
+                        con.maxBands(), con.reason(), con.maxBrushes(), con.maxKiB(), con.leaseS());
+                Easel.send(ref, FrameType.CONCESION, msg.encode());
+            }
+        }
         return session;
     }
 
-    private void resume(Session session, MsgHandshake.ResumeRequest request) {
+    private List<Long> resume(Session session, MsgHandshake.ResumeRequest request) {
         Sessions.Grave grave = sessions.recover(request.previousSession());
         boolean ok = grave != null
                 && Arrays.equals(grave.session().ticket(), request.ticket())
@@ -74,13 +87,16 @@ final class SessionHandshake {
         if (!ok) {
             Easel.send(ref, FrameType.ERROR, new MsgHandshake.ProtocolError(
                     ProtoCodes.ERR_REANUDACION, 0, FrameType.SALUDO, "REANUDAR").encode());
-            return;
+            return List.of();
         }
+        List<Long> resumed = new ArrayList<>();
         for (var entry : grave.session().canvases().entrySet()) {
             entry.getValue().session(session);
             session.canvases().put(entry.getKey(), entry.getValue());
+            resumed.add(entry.getKey());
         }
         session.ticket(sessions.newTicket());
+        return resumed;
     }
 
     private static boolean covers(Canvas canvas, seurat.proto.Ranges ranges) {

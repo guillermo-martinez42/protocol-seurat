@@ -22,6 +22,7 @@ public final class Canvas {
     private Session session;
     private long nextOrder;
     private final Map<Long, ScrapeOrder> pendingOrders = new HashMap<>();
+    private final Map<Long, Ranges> pendingRenewals = new HashMap<>();
     private MsgGaze.Gaze gaze;
     private long gazeSeq;
     private long planPrevistas;
@@ -101,6 +102,20 @@ public final class Canvas {
         pendingOrders.remove(order.order());
     }
 
+    public void addPendingRenewal(long order, Ranges ranges) {
+        pendingRenewals.put(order, ranges);
+    }
+
+    public void acknowledgeRenewal(long throughOrder, long nowNs, long leaseNs, long deltaNs) {
+        var iter = pendingRenewals.entrySet().iterator();
+        while (iter.hasNext()) {
+            var e = iter.next();
+            if (e.getKey() <= throughOrder) {
+                book.acknowledge(e.getValue(), nowNs, leaseNs, deltaNs);
+                iter.remove();
+            }
+        }
+    }
 
     public MsgGaze.Gaze gaze() {
         return gaze;

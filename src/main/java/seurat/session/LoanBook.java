@@ -62,6 +62,17 @@ public final class LoanBook {
         return deliveries.containsKey(n);
     }
 
+    public synchronized Ranges pruneExpired(long nowNs) {
+        Ranges.Builder expired = new Ranges.Builder();
+        for (var entry : new HashMap<>(deadlineNs).entrySet()) {
+            if (entry.getValue() < nowNs) {
+                expired.add(entry.getKey());
+                remove(entry.getKey());
+            }
+        }
+        return expired.build();
+    }
+
     /** Book ∩ [1,through] minus predicate minus cancelled: what client must keep. */
     public synchronized Ranges expected(long through,
             java.util.function.Predicate<Delivery> scrape, Ranges cancelled) {

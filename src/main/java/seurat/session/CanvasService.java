@@ -57,9 +57,13 @@ final class CanvasService {
             return;
         }
         synchronized (canvas) {
-            canvas.book().acknowledge(receipt.completed(), System.nanoTime(),
-                    SeuratConstants.LEASE_S * 1_000_000_000L,
-                    SeuratConstants.SKEW_MS * 1_000_000L);
+            long now = System.nanoTime();
+            long leaseNs = SeuratConstants.LEASE_S * 1_000_000_000L;
+            long skewNs = SeuratConstants.SKEW_MS * 1_000_000L;
+            canvas.book().acknowledge(receipt.completed(), now, leaseNs, skewNs);
+            if (receipt.renewThrough() > 0) {
+                canvas.acknowledgeRenewal(receipt.renewThrough(), now, leaseNs, skewNs);
+            }
             session.free = Math.max(1, receipt.free());
             session.queueMs = receipt.queueMs();
         }
