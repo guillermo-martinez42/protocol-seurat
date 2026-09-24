@@ -1,22 +1,22 @@
-import type { ObraMsg } from '@/shared/proto/messages';
+import type { WorkMsg } from '@/shared/proto/messages';
 import type { Orient, Work } from './types';
 
 export type Filter = 'all' | Orient;
 
-export function applyObra(prev: Map<string, Work>, m: ObraMsg): Map<string, Work> {
+export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work> {
   const next = new Map(prev);
-  if (m.evento === 4) {
+  if (m.event === 4) {
     next.delete(m.id);
     return next;
   }
   next.set(m.id, {
     id: m.id,
-    nombre: m.nombre,
-    ancho: m.ancho,
-    alto: m.alto,
+    name: m.name,
+    width: m.width,
+    height: m.height,
     estratos: m.estratos,
     estado: m.estado as Work['estado'],
-    edicion: m.edicion,
+    edition: m.edition,
     progreso: m.progreso,
   });
   return next;
@@ -24,7 +24,7 @@ export function applyObra(prev: Map<string, Work>, m: ObraMsg): Map<string, Work
 
 export function filterWorks(list: Work[], f: Filter): Work[] {
   if (f === 'all') return list;
-  return list.filter((w) => (w.ancho >= w.alto ? 'landscape' : 'portrait') === f);
+  return list.filter((w) => (w.width >= w.height ? 'landscape' : 'portrait') === f);
 }
 
 export function fixtureWorks(): Work[] {
@@ -42,14 +42,14 @@ export function fixtureWorks(): Work[] {
     ['Plate 11', 3600, 2400],
     ['Plate 12', 3600, 2400],
   ];
-  return defs.map(([nombre, ancho, alto], i) => ({
+  return defs.map(([name, width, height], i) => ({
     id: 'lamina-' + String(i + 1).padStart(2, '0'),
-    nombre,
-    ancho,
-    alto,
+    name,
+    width,
+    height,
     estratos: 11,
     estado: 3 as const,
-    edicion: 2,
+    edition: 2,
     progreso: 100,
   }));
 }

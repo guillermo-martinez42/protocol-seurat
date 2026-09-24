@@ -7,33 +7,33 @@ import { CAP_DATAGRAMAS, CAP_REANUDAR, T } from '@/shared/proto/messages';
 import {
   abrirCore,
   adiosCore,
-  auditarDecode,
+  auditDecode,
   bienvenidaDecode,
   concesionDecode,
   errorDecode,
   latidoCore,
-  miradaCore,
-  miradaDecode,
+  gazeCore,
+  gazeDecode,
   obraDecode,
   abiertaDecode,
   planDecode,
-  rasparDecode,
-  renovarDecode,
+  scrapeDecode,
+  renewDecode,
   saludoCore,
   saludoTlvs,
-  reciboCore,
-  raspadoCore,
-  soltarCore,
-  inventarioCore,
+  receiptCore,
+  scrapedCore,
+  releaseCore,
+  inventoryCore,
   type Abierta,
-  type Auditar,
+  type Audit,
   type Bienvenida,
-  type Concesion,
-  type ObraMsg,
+  type Concession,
+  type WorkMsg,
   type PlanMsg,
   type ProtoError,
-  type Raspar,
-  type Renovar,
+  type Scrape,
+  type Renew,
 } from '@/shared/proto/messages';
 import { concat, u64Decode, viEncode } from '@/shared/proto/varint';
 import { encodeFrame, FatalProtocolError } from '@/shared/proto/frame';
@@ -42,13 +42,13 @@ import { declareMemMib, loadResume, persistResume } from '@/entities/session/sto
 
 export interface SessionEvents {
   onBienvenida(b: Bienvenida): void;
-  onObra(m: ObraMsg): void;
+  onObra(m: WorkMsg): void;
   onAbierta(a: Abierta): void;
-  onConcesion(c: Concesion): void;
+  onConcesion(c: Concession): void;
   onPlan(p: PlanMsg): void;
-  onRaspar(r: Raspar): void;
-  onRenovar(r: Renovar): void;
-  onAuditar(a: Auditar): void;
+  onRaspar(r: Scrape): void;
+  onRenovar(r: Renew): void;
+  onAuditar(a: Audit): void;
   onProtoError(e: ProtoError): void;
   onDelivery(bytes: Uint8Array): void;
   onStatus(s: string): void;
@@ -83,16 +83,16 @@ export class SessionClient {
     const t = await this.connect(ses.lienzo, ses.respaldo);
     this.transport = t;
     const claim = resume
-      ? { sesionAnterior: resume.sesionId, ficha: resume.ficha, claims: [] as Array<{ handle: number; rangos: number[] }> }
+      ? { sesionAnterior: resume.sessionId, ticket: resume.ticket, claims: [] as Array<{ handle: number; ranges: number[] }> }
       : undefined;
-    const s = { verMin: 1, verMax: 1, caps: CAP_DATAGRAMAS | CAP_REANUDAR, memMib: this.memMib, token, reanudar: claim };
+    const s = { verMin: 1, verMax: 1, caps: CAP_DATAGRAMAS | CAP_REANUDAR, memMib: this.memMib, token, resume: claim };
     t.sendControl(encodeFrame(T.SALUDO, saludoCore(s), saludoTlvs(s)));
     this.events.onStatus('saludo');
   }
 
-  private async connect(lienzo: string, respaldo: string): Promise<SeuratTransport> {
+  private async connect(url: string, fallbackUrl: string): Promise<SeuratTransport> {
     if (WtTransport.supported()) {
-      const wt = new WtTransport(lienzo);
+      const wt = new WtTransport(url);
       try {
         await wt.connect();
         this.wire(wt);
@@ -102,7 +102,7 @@ export class SessionClient {
         wt.close();
       }
     }
-    const ws = new WsTransport(respaldo);
+    const ws = new WsTransport(fallbackUrl);
     await ws.connect();
     this.wire(ws);
     this.events.onStatus('websocket');
@@ -133,7 +133,7 @@ export class SessionClient {
         case T.BIENVENIDA: {
           const b = bienvenidaDecode(payload);
           this.bienvenida = b;
-          if (b.ficha.length === 32 && b.sesionId !== null) persistResume(b.sesionId, b.ficha);
+          if (b.ticket.length === 32 && b.sessionId !== null) persistResume(b.sessionId, b.ticket);
           this.events.onBienvenida(b);
           break;
         }
@@ -150,8 +150,8 @@ export class SessionClient {
           this.events.onAbierta(abiertaDecode(payload));
           break;
         case T.MIRADA:
-          this.events.onStatus('mirada-echo');
-          miradaDecode(payload);
+          this.events.onStatus('gaze-echo');
+          gazeDecode(payload);
           break;
         case T.CONCESION:
           this.events.onConcesion(concesionDecode(payload));
@@ -160,13 +160,13 @@ export class SessionClient {
           this.events.onPlan(planDecode(payload));
           break;
         case T.RASPAR:
-          this.events.onRaspar(rasparDecode(payload));
+          this.events.onRaspar(scrapeDecode(payload));
           break;
         case T.RENOVAR:
-          this.events.onRenovar(renovarDecode(payload));
+          this.events.onRenovar(renewDecode(payload));
           break;
         case T.AUDITAR:
-          this.events.onAuditar(auditarDecode(payload));
+          this.events.onAuditar(auditDecode(payload));
           break;
         default:
           if (tipo < 0x40) throw new FatalProtocolError('ERROR 1: unknown mandatory type');
@@ -190,27 +190,27 @@ export class SessionClient {
   }
 
   sendMiradaReliable(m: { handle: number; seq: number; x0: number; y0: number; x1: number; y1: number; vw: number; vh: number; mflags: number }): void {
-    this.transport?.sendControl(encodeFrame(T.MIRADA, miradaCore(m)));
+    this.transport?.sendControl(encodeFrame(T.MIRADA, gazeCore(m)));
   }
 
-  sendRecibo(handle: number, completadas: number[], colaMs: number, libre: number, renovHasta: number): void {
-    this.transport?.sendControl(encodeFrame(T.RECIBO, reciboCore({ handle, completadas, colaMs, libre, renovHasta })));
+  sendRecibo(handle: number, completed: number[], queueMs: number, libre: number, renewThrough: number): void {
+    this.transport?.sendControl(encodeFrame(T.RECIBO, receiptCore({ handle, completed, queueMs, libre, renewThrough })));
   }
 
-  sendSoltar(handle: number, motivo: number, rangos: number[]): void {
-    if (rangos.length === 0) return;
-    this.transport?.sendControl(encodeFrame(T.SOLTAR, soltarCore({ handle, motivo, rangos })));
+  sendSoltar(handle: number, reason: number, ranges: number[]): void {
+    if (ranges.length === 0) return;
+    this.transport?.sendControl(encodeFrame(T.SOLTAR, releaseCore({ handle, reason, ranges })));
   }
 
-  sendRaspado(handle: number, orden: number, epoca: number, hasta: number, raspadas: number, liberadasKib: number, conservadas: number[]): void {
+  sendRaspado(handle: number, order: number, epoch: number, through: number, raspadas: number, liberadasKib: number, conservadas: number[]): void {
     this.transport?.sendControl(
-      encodeFrame(T.RASPADO, raspadoCore({ handle, orden, epoca, hasta, raspadas, liberadasKib, conservadas })),
+      encodeFrame(T.RASPADO, scrapedCore({ handle, order, epoch, through, raspadas, liberadasKib, conservadas })),
     );
   }
 
-  sendInventario(handle: number, orden: number, hasta: number, pinceladas: number, kib: number, rangos: number[]): void {
+  sendInventory(handle: number, order: number, through: number, brushCount: number, kib: number, ranges: number[]): void {
     this.transport?.sendControl(
-      encodeFrame(T.INVENTARIO, inventarioCore({ handle, orden, hasta, pinceladas, kib, rangos })),
+      encodeFrame(T.INVENTARIO, inventoryCore({ handle, order, through, brushCount, kib, ranges })),
     );
   }
 

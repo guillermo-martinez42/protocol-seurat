@@ -32,8 +32,8 @@ describe('Work filtering & fixtures', () => {
     expect(all.length).toBe(12);
     expect(landscapes.length).toBe(8);
     expect(portraits.length).toBe(4);
-    for (const w of landscapes) expect(w.ancho).toBeGreaterThanOrEqual(w.alto);
-    for (const w of portraits) expect(w.ancho).toBeLessThan(w.alto);
+    for (const w of landscapes) expect(w.width).toBeGreaterThanOrEqual(w.height);
+    for (const w of portraits) expect(w.width).toBeLessThan(w.height);
   });
 });
 

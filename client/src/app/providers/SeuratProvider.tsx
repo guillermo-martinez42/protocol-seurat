@@ -1,23 +1,23 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SessionClient, type SessionEvents } from './session-client';
 import { DeliverySink } from './delivery-sink';
-import { applyObra, fixtureWorks } from '@/entities/work/store';
+import { applyWork, fixtureWorks } from '@/entities/work/store';
 import type { Work } from '@/entities/work/types';
-import type { Abierta, Bienvenida, Concesion, PlanMsg, ProtoError } from '@/shared/proto/messages';
-import { MiradaSender } from '@/features/send-mirada';
+import type { Abierta, Bienvenida, Concession, PlanMsg, ProtoError } from '@/shared/proto/messages';
+import { GazeSender } from '@/features/send-gaze';
 
 export interface SeuratState {
   status: string;
   works: Work[];
   bienvenida: Bienvenida | null;
-  abierta: Abierta | null;
-  concesion: Concesion | null;
+  opened: Abierta | null;
+  concession: Concession | null;
   plan: PlanMsg | null;
   lastError: ProtoError | null;
   paintTick: number;
   client: SessionClient | null;
   sink: DeliverySink | null;
-  miradas: MiradaSender | null;
+  gazeService: GazeSender | null;
   retryConnect(): void;
 }
 
@@ -33,14 +33,14 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [status, setStatus] = useState('boot');
   const [works, setWorks] = useState<Work[]>(() => fixtureWorks());
   const [bienvenida, setBienvenida] = useState<Bienvenida | null>(null);
-  const [abierta, setAbierta] = useState<Abierta | null>(null);
-  const [concesion, setConcesion] = useState<Concesion | null>(null);
+  const [opened, setAbierta] = useState<Abierta | null>(null);
+  const [concession, setConcesion] = useState<Concession | null>(null);
   const [plan, setPlan] = useState<PlanMsg | null>(null);
   const [lastError, setLastError] = useState<ProtoError | null>(null);
   const [paintTick, setPaintTick] = useState(0);
   const clientRef = useRef<SessionClient | null>(null);
   const sinkRef = useRef<DeliverySink | null>(null);
-  const miradasRef = useRef<MiradaSender | null>(null);
+  const miradasRef = useRef<GazeSender | null>(null);
   const worksRef = useRef(new Map<string, Work>());
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
         if (alive) setBienvenida(b);
       },
       onObra: (m) => {
-        worksRef.current = applyObra(worksRef.current, m);
+        worksRef.current = applyWork(worksRef.current, m);
         if (alive) setWorks([...worksRef.current.values()]);
       },
       onAbierta: (a) => {
@@ -59,32 +59,32 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
         const sink = new DeliverySink(
           a.handle,
           () => clientRef.current,
-          () => concesionRef.current?.maxKib ?? 36864,
-          () => concesionRef.current?.maxPinceladas ?? 768,
+          () => concessionRef.current?.maxKiB ?? 36864,
+          () => concessionRef.current?.maxBrushes ?? 768,
           a.semillaAncho,
           a.semillaAlto,
         );
         sinkRef.current = sink;
       },
       onConcesion: (c) => {
-        concesionRef.current = c;
+        concessionRef.current = c;
         if (alive) setConcesion(c);
       },
       onPlan: (p) => {
         if (alive) setPlan(p);
-        if (p.evento === 2) sinkRef.current?.applyPlanCanceladas(p.canceladas);
+        if (p.event === 2) sinkRef.current?.applyPlanCanceladas(p.cancelled);
       },
       onRaspar: (r) => {
         sinkRef.current?.applyRaspar(r, () => performance.now());
         if (alive) setPaintTick((t) => t + 1);
       },
       onRenovar: (r) => {
-        sinkRef.current?.applyRenovar(r.rangos, r.orden, r.arriendoS, () => performance.now());
+        sinkRef.current?.applyRenovar(r.ranges, r.order, r.leaseS, () => performance.now());
       },
       onAuditar: (a) => {
-        const inv = sinkRef.current?.inventory(a.hasta);
+        const inv = sinkRef.current?.inventory(a.through);
         if (inv && clientRef.current) {
-          clientRef.current.sendInventario(a.handle, a.orden, a.hasta, inv.pinceladas, inv.kib, inv.rangos);
+          clientRef.current.sendInventory(a.handle, a.order, a.through, inv.brushCount, inv.kib, inv.ranges);
         }
       },
       onProtoError: (e) => {
@@ -99,16 +99,16 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       onDelivery: (bytes) => {
         sinkRef.current?.ingest(bytes, () => performance.now(), () => {
           if (alive) setPaintTick((t) => t + 1);
-        }, concesionRef.current?.arriendoS ?? 120);
+        }, concessionRef.current?.leaseS ?? 120);
       },
       onStatus: (s) => {
         if (alive) setStatus(s);
       },
     };
-    const concesionRef: { current: Concesion | null } = { current: null };
+    const concessionRef: { current: Concession | null } = { current: null };
     const client = new SessionClient(events);
     clientRef.current = client;
-    miradasRef.current = new MiradaSender(() => clientRef.current?.activeTransport ?? null);
+    miradasRef.current = new GazeSender(() => clientRef.current?.activeTransport ?? null);
     client.boot().then(
       () => {
         if (alive) client.requestCatalog();
@@ -158,11 +158,11 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
 
   const value = useMemo<SeuratState>(
     () => ({
-      status, works, bienvenida, abierta, concesion, plan, lastError, paintTick,
-      client: clientRef.current, sink: sinkRef.current, miradas: miradasRef.current,
+      status, works, bienvenida, opened, concession, plan, lastError, paintTick,
+      client: clientRef.current, sink: sinkRef.current, gazeService: miradasRef.current,
       retryConnect,
     }),
-    [status, works, bienvenida, abierta, concesion, plan, lastError, paintTick],
+    [status, works, bienvenida, opened, concession, plan, lastError, paintTick],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

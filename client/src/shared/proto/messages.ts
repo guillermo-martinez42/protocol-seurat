@@ -12,15 +12,15 @@ export const T = {
 export const CAP_DATAGRAMAS = 0x01;
 export const CAP_REANUDAR = 0x02;
 
-export interface ReanudarClaim { handle: number; rangos: number[] }
+export interface ReanudarClaim { handle: number; ranges: number[] }
 export interface Saludo {
   verMin: number; verMax: number; caps: number; memMib: number; token: Uint8Array;
-  reanudar?: { sesionAnterior: bigint; ficha: Uint8Array; claims: ReanudarClaim[] };
+  resume?: { sesionAnterior: bigint; ticket: Uint8Array; claims: ReanudarClaim[] };
 }
 export interface Bienvenida {
-  version: number; caps: number; sesionId: bigint; lado: number; arriendoS: number;
+  version: number; caps: number; sessionId: bigint; lado: number; leaseS: number;
   latidoS: number; maxEnVuelo: number; sesionMaxPinceladas: number;
-  ficha: Uint8Array; reanudada: number[];
+  ticket: Uint8Array; resumed: number[];
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -38,13 +38,13 @@ export function saludoCore(s: Saludo): Uint8Array {
 }
 
 export function saludoTlvs(s: Saludo): Uint8Array[] {
-  if (!s.reanudar) return [];
+  if (!s.resume) return [];
   const parts: Array<number[] | Uint8Array> = [
-    u64Encode(s.reanudar.sesionAnterior),
-    s.reanudar.ficha,
-    viEncode(s.reanudar.claims.length),
+    u64Encode(s.resume.sesionAnterior),
+    s.resume.ticket,
+    viEncode(s.resume.claims.length),
   ];
-  for (const c of s.reanudar.claims) parts.push(viEncode(c.handle), rangesEncode(c.rangos));
+  for (const c of s.resume.claims) parts.push(viEncode(c.handle), rangesEncode(c.ranges));
   return [tlvEncode(0x01, concat(...parts))];
 }
 
@@ -61,31 +61,31 @@ export function saludoDecode(payload: Uint8Array): Saludo {
     if (t.tag !== 0x01) continue;
     let q = 0;
     const s64 = u64Decode(t.value, q); q = s64.next;
-    const ficha = t.value.slice(q, q + 32); q += 32;
+    const ticket = t.value.slice(q, q + 32); q += 32;
     const n = viDecode(t.value, q); q = n.next;
     const claims: ReanudarClaim[] = [];
     for (let i = 0; i < n.value; i++) {
       const h = viDecode(t.value, q); q = h.next;
       const rr = rangesDecode(t.value, q); q = rr.next;
-      claims.push({ handle: h.value, rangos: rr.values });
+      claims.push({ handle: h.value, ranges: rr.values });
     }
-    out.reanudar = { sesionAnterior: s64.value, ficha, claims };
+    out.resume = { sesionAnterior: s64.value, ticket, claims };
   }
   return out;
 }
 
 export function bienvenidaCore(b: Bienvenida): Uint8Array {
   return concat(
-    viEncode(b.version), viEncode(b.caps), u64Encode(b.sesionId), viEncode(b.lado),
-    viEncode(b.arriendoS), viEncode(b.latidoS), viEncode(b.maxEnVuelo),
+    viEncode(b.version), viEncode(b.caps), u64Encode(b.sessionId), viEncode(b.lado),
+    viEncode(b.leaseS), viEncode(b.latidoS), viEncode(b.maxEnVuelo),
     viEncode(b.sesionMaxPinceladas),
   );
 }
 
 export function bienvenidaTlvs(b: Bienvenida): Uint8Array[] {
-  const out = [tlvEncode(0x02, b.ficha)];
-  if (b.reanudada.length > 0) {
-    out.push(tlvEncode(0x03, concat(viEncode(b.reanudada.length), ...b.reanudada.map((h) => viEncode(h)))));
+  const out = [tlvEncode(0x02, b.ticket)];
+  if (b.resumed.length > 0) {
+    out.push(tlvEncode(0x03, concat(viEncode(b.resumed.length), ...b.resumed.map((h) => viEncode(h)))));
   }
   return out;
 }
@@ -96,22 +96,22 @@ export function bienvenidaDecode(payload: Uint8Array): Bienvenida {
   r = viDecode(payload, p); const caps = r.value; p = r.next;
   const sid = u64Decode(payload, p); p = sid.next;
   r = viDecode(payload, p); const lado = r.value; p = r.next;
-  r = viDecode(payload, p); const arriendoS = r.value; p = r.next;
+  r = viDecode(payload, p); const leaseS = r.value; p = r.next;
   r = viDecode(payload, p); const latidoS = r.value; p = r.next;
   r = viDecode(payload, p); const maxEnVuelo = r.value; p = r.next;
   r = viDecode(payload, p); const sesionMaxPinceladas = r.value; p = r.next;
   const out: Bienvenida = {
-    version, caps, sesionId: sid.value, lado, arriendoS, latidoS,
-    maxEnVuelo, sesionMaxPinceladas, ficha: new Uint8Array(0), reanudada: [],
+    version, caps, sessionId: sid.value, lado, leaseS, latidoS,
+    maxEnVuelo, sesionMaxPinceladas, ticket: new Uint8Array(0), resumed: [],
   };
   for (const t of parseTlvs(payload.slice(p))) {
-    if (t.tag === 0x02) out.ficha = t.value;
+    if (t.tag === 0x02) out.ticket = t.value;
     else if (t.tag === 0x03) {
       let q = 0;
       const n = viDecode(t.value, q); q = n.next;
       for (let i = 0; i < n.value; i++) {
         const h = viDecode(t.value, q); q = h.next;
-        out.reanudada.push(h.value);
+        out.resumed.push(h.value);
       }
     }
   }
@@ -154,26 +154,26 @@ export function adiosDecode(payload: Uint8Array): Adios {
   return { codigo: c.value, msg: s.value };
 }
 
-export interface ObraMsg {
-  evento: number; estado: number; progreso: number; edicion: number;
-  ancho: number; alto: number; estratos: number; id: string; nombre: string;
+export interface WorkMsg {
+  event: number; estado: number; progreso: number; edition: number;
+  width: number; height: number; estratos: number; id: string; name: string;
 }
-export function obraCore(o: ObraMsg): Uint8Array {
+export function obraCore(o: WorkMsg): Uint8Array {
   return concat(
-    [o.evento, o.estado, o.progreso], viEncode(o.edicion), viEncode(o.ancho),
-    viEncode(o.alto), [o.estratos], strEncode(o.id), strEncode(o.nombre),
+    [o.event, o.estado, o.progreso], viEncode(o.edition), viEncode(o.width),
+    viEncode(o.height), [o.estratos], strEncode(o.id), strEncode(o.name),
   );
 }
-export function obraDecode(payload: Uint8Array): ObraMsg {
+export function obraDecode(payload: Uint8Array): WorkMsg {
   let p = 0;
-  const evento = payload[p] ?? 0; const estado = payload[p + 1] ?? 0; const progreso = payload[p + 2] ?? 0; p += 3;
-  let r = viDecode(payload, p); const edicion = r.value; p = r.next;
-  r = viDecode(payload, p); const ancho = r.value; p = r.next;
-  r = viDecode(payload, p); const alto = r.value; p = r.next;
+  const event = payload[p] ?? 0; const estado = payload[p + 1] ?? 0; const progreso = payload[p + 2] ?? 0; p += 3;
+  let r = viDecode(payload, p); const edition = r.value; p = r.next;
+  r = viDecode(payload, p); const width = r.value; p = r.next;
+  r = viDecode(payload, p); const height = r.value; p = r.next;
   const estratos = payload[p] ?? 0; p += 1;
   const id = strDecode(payload, p); p = id.next;
-  const nombre = strDecode(payload, p);
-  return { evento, estado, progreso, edicion, ancho, alto, estratos, id: id.value, nombre: nombre.value };
+  const name = strDecode(payload, p);
+  return { event, estado, progreso, edition, width, height, estratos, id: id.value, name: name.value };
 }
 
 export function abrirCore(id: string): Uint8Array {
@@ -184,40 +184,40 @@ export function abrirDecode(payload: Uint8Array): string {
 }
 
 export interface Abierta {
-  handle: number; ancho: number; alto: number; estratos: number; edicion: number;
+  handle: number; width: number; height: number; estratos: number; edition: number;
   techoEstrato: number; techoBandas: number; semillaAncho: number; semillaAlto: number;
 }
 export function abiertaCore(a: Abierta): Uint8Array {
   return concat(
-    viEncode(a.handle), viEncode(a.ancho), viEncode(a.alto), [a.estratos],
-    viEncode(a.edicion), [a.techoEstrato, a.techoBandas],
+    viEncode(a.handle), viEncode(a.width), viEncode(a.height), [a.estratos],
+    viEncode(a.edition), [a.techoEstrato, a.techoBandas],
     viEncode(a.semillaAncho), viEncode(a.semillaAlto),
   );
 }
 export function abiertaDecode(payload: Uint8Array): Abierta {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const ancho = r.value; p = r.next;
-  r = viDecode(payload, p); const alto = r.value; p = r.next;
+  r = viDecode(payload, p); const width = r.value; p = r.next;
+  r = viDecode(payload, p); const height = r.value; p = r.next;
   const estratos = payload[p] ?? 0; p += 1;
-  r = viDecode(payload, p); const edicion = r.value; p = r.next;
+  r = viDecode(payload, p); const edition = r.value; p = r.next;
   const techoEstrato = payload[p] ?? 0; const techoBandas = payload[p + 1] ?? 0; p += 2;
   r = viDecode(payload, p); const semillaAncho = r.value; p = r.next;
   r = viDecode(payload, p); const semillaAlto = r.value; p = r.next;
-  return { handle, ancho, alto, estratos, edicion, techoEstrato, techoBandas, semillaAncho, semillaAlto };
+  return { handle, width, height, estratos, edition, techoEstrato, techoBandas, semillaAncho, semillaAlto };
 }
 
-export interface Mirada {
+export interface Gaze {
   handle: number; seq: number; x0: number; y0: number; x1: number; y1: number;
   vw: number; vh: number; mflags: number;
 }
-export function miradaCore(m: Mirada): Uint8Array {
+export function gazeCore(m: Gaze): Uint8Array {
   return concat(
     viEncode(m.handle), viEncode(m.seq), viEncode(m.x0), viEncode(m.y0),
     viEncode(m.x1), viEncode(m.y1), viEncode(m.vw), viEncode(m.vh), [m.mflags],
   );
 }
-export function miradaDecode(payload: Uint8Array): Mirada {
+export function gazeDecode(payload: Uint8Array): Gaze {
   let p = 0;
   const vals: number[] = [];
   for (let i = 0; i < 8; i++) {
@@ -232,173 +232,173 @@ export function miradaDecode(payload: Uint8Array): Mirada {
   };
 }
 
-export interface Concesion {
-  handle: number; epoca: number; estratoMin: number; bandasMax: number; motivo: number;
-  maxPinceladas: number; maxKib: number; arriendoS: number;
+export interface Concession {
+  handle: number; epoch: number; estratoMin: number; bandasMax: number; reason: number;
+  maxBrushes: number; maxKiB: number; leaseS: number;
 }
-export function concesionCore(c: Concesion): Uint8Array {
+export function concesionCore(c: Concession): Uint8Array {
   return concat(
-    viEncode(c.handle), viEncode(c.epoca), [c.estratoMin, c.bandasMax, c.motivo],
-    viEncode(c.maxPinceladas), viEncode(c.maxKib), viEncode(c.arriendoS),
+    viEncode(c.handle), viEncode(c.epoch), [c.estratoMin, c.bandasMax, c.reason],
+    viEncode(c.maxBrushes), viEncode(c.maxKiB), viEncode(c.leaseS),
   );
 }
-export function concesionDecode(payload: Uint8Array): Concesion {
+export function concesionDecode(payload: Uint8Array): Concession {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const epoca = r.value; p = r.next;
-  const estratoMin = payload[p] ?? 0; const bandasMax = payload[p + 1] ?? 0; const motivo = payload[p + 2] ?? 0; p += 3;
-  r = viDecode(payload, p); const maxPinceladas = r.value; p = r.next;
-  r = viDecode(payload, p); const maxKib = r.value; p = r.next;
-  r = viDecode(payload, p); const arriendoS = r.value; p = r.next;
-  return { handle, epoca, estratoMin, bandasMax, motivo, maxPinceladas, maxKib, arriendoS };
+  r = viDecode(payload, p); const epoch = r.value; p = r.next;
+  const estratoMin = payload[p] ?? 0; const bandasMax = payload[p + 1] ?? 0; const reason = payload[p + 2] ?? 0; p += 3;
+  r = viDecode(payload, p); const maxBrushes = r.value; p = r.next;
+  r = viDecode(payload, p); const maxKiB = r.value; p = r.next;
+  r = viDecode(payload, p); const leaseS = r.value; p = r.next;
+  return { handle, epoch, estratoMin, bandasMax, reason, maxBrushes, maxKiB, leaseS };
 }
 
 export type PlanMsg =
-  | { handle: number; seqMirada: number; evento: 0; primera: number; previstas: number; regulacion: number }
-  | { handle: number; seqMirada: number; evento: 1; ultima: number }
-  | { handle: number; seqMirada: number; evento: 2; canceladas: number[] };
+  | { handle: number; gazeSeq: number; event: 0; first: number; expectedCount: number; throttle: number }
+  | { handle: number; gazeSeq: number; event: 1; last: number }
+  | { handle: number; gazeSeq: number; event: 2; cancelled: number[] };
 export function planCore(p: PlanMsg): Uint8Array {
-  const head = concat(viEncode(p.handle), viEncode(p.seqMirada), [p.evento]);
-  if (p.evento === 0) return concat(head, viEncode(p.primera), viEncode(p.previstas), [p.regulacion]);
-  if (p.evento === 1) return concat(head, viEncode(p.ultima));
-  return concat(head, rangesEncode(p.canceladas));
+  const head = concat(viEncode(p.handle), viEncode(p.gazeSeq), [p.event]);
+  if (p.event === 0) return concat(head, viEncode(p.first), viEncode(p.expectedCount), [p.throttle]);
+  if (p.event === 1) return concat(head, viEncode(p.last));
+  return concat(head, rangesEncode(p.cancelled));
 }
 export function planDecode(payload: Uint8Array): PlanMsg {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const seqMirada = r.value; p = r.next;
-  const evento = payload[p] ?? 0; p += 1;
-  if (evento === 0) {
-    r = viDecode(payload, p); const primera = r.value; p = r.next;
-    r = viDecode(payload, p); const previstas = r.value; p = r.next;
-    return { handle, seqMirada, evento, primera, previstas, regulacion: payload[p] ?? 0 };
+  r = viDecode(payload, p); const gazeSeq = r.value; p = r.next;
+  const event = payload[p] ?? 0; p += 1;
+  if (event === 0) {
+    r = viDecode(payload, p); const first = r.value; p = r.next;
+    r = viDecode(payload, p); const expectedCount = r.value; p = r.next;
+    return { handle, gazeSeq, event, first, expectedCount, throttle: payload[p] ?? 0 };
   }
-  if (evento === 1) {
+  if (event === 1) {
     r = viDecode(payload, p);
-    return { handle, seqMirada, evento, ultima: r.value };
+    return { handle, gazeSeq, event, last: r.value };
   }
   const rr = rangesDecode(payload, p);
-  return { handle, seqMirada, evento: 2, canceladas: rr.values };
+  return { handle, gazeSeq, event: 2, cancelled: rr.values };
 }
 
-export interface Raspar { handle: number; orden: number; epoca: number; hasta: number; predicado: number; params: Uint8Array }
-export function rasparCore(r: Raspar): Uint8Array {
-  return concat(viEncode(r.handle), viEncode(r.orden), viEncode(r.epoca), viEncode(r.hasta), [r.predicado], r.params);
+export interface Scrape { handle: number; order: number; epoch: number; through: number; predicate: number; params: Uint8Array }
+export function scrapeCore(r: Scrape): Uint8Array {
+  return concat(viEncode(r.handle), viEncode(r.order), viEncode(r.epoch), viEncode(r.through), [r.predicate], r.params);
 }
-export function rasparDecode(payload: Uint8Array): Raspar {
+export function scrapeDecode(payload: Uint8Array): Scrape {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const orden = r.value; p = r.next;
-  r = viDecode(payload, p); const epoca = r.value; p = r.next;
-  r = viDecode(payload, p); const hasta = r.value; p = r.next;
-  const predicado = payload[p] ?? 0; p += 1;
-  return { handle, orden, epoca, hasta, predicado, params: payload.slice(p) };
+  r = viDecode(payload, p); const order = r.value; p = r.next;
+  r = viDecode(payload, p); const epoch = r.value; p = r.next;
+  r = viDecode(payload, p); const through = r.value; p = r.next;
+  const predicate = payload[p] ?? 0; p += 1;
+  return { handle, order, epoch, through, predicate, params: payload.slice(p) };
 }
-export function rasparParamsEstrato(estrato: number): Uint8Array {
-  return Uint8Array.from([estrato]);
+export function scrapeParamsLowStratum(stratum: number): Uint8Array {
+  return Uint8Array.from([stratum]);
 }
-export function rasparParamsFuera(x0: number, y0: number, x1: number, y1: number): Uint8Array {
+export function scrapeParamsOutside(x0: number, y0: number, x1: number, y1: number): Uint8Array {
   return concat(viEncode(x0), viEncode(y0), viEncode(x1), viEncode(y1));
 }
-export function rasparParamsBandas(estrato: number, bandasMax: number): Uint8Array {
-  return Uint8Array.from([estrato, bandasMax]);
+export function scrapeParamsBands(stratum: number, bandasMax: number): Uint8Array {
+  return Uint8Array.from([stratum, bandasMax]);
 }
-export function rasparParamsLista(rangos: number[]): Uint8Array {
-  return rangesEncode(rangos);
+export function scrapeParamsList(ranges: number[]): Uint8Array {
+  return rangesEncode(ranges);
 }
 
-export interface Raspado {
-  handle: number; orden: number; epoca: number; hasta: number;
+export interface Scraped {
+  handle: number; order: number; epoch: number; through: number;
   raspadas: number; liberadasKib: number; conservadas: number[];
 }
-export function raspadoCore(r: Raspado): Uint8Array {
+export function scrapedCore(r: Scraped): Uint8Array {
   return concat(
-    viEncode(r.handle), viEncode(r.orden), viEncode(r.epoca), viEncode(r.hasta),
+    viEncode(r.handle), viEncode(r.order), viEncode(r.epoch), viEncode(r.through),
     viEncode(r.raspadas), viEncode(r.liberadasKib), rangesEncode(r.conservadas),
   );
 }
-export function raspadoDecode(payload: Uint8Array): Raspado {
+export function scrapedDecode(payload: Uint8Array): Scraped {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const orden = r.value; p = r.next;
-  r = viDecode(payload, p); const epoca = r.value; p = r.next;
-  r = viDecode(payload, p); const hasta = r.value; p = r.next;
+  r = viDecode(payload, p); const order = r.value; p = r.next;
+  r = viDecode(payload, p); const epoch = r.value; p = r.next;
+  r = viDecode(payload, p); const through = r.value; p = r.next;
   r = viDecode(payload, p); const raspadas = r.value; p = r.next;
   r = viDecode(payload, p); const liberadasKib = r.value; p = r.next;
   const rr = rangesDecode(payload, p);
-  return { handle, orden, epoca, hasta, raspadas, liberadasKib, conservadas: rr.values };
+  return { handle, order, epoch, through, raspadas, liberadasKib, conservadas: rr.values };
 }
 
-export interface Recibo { handle: number; completadas: number[]; colaMs: number; libre: number; renovHasta: number }
-export function reciboCore(r: Recibo): Uint8Array {
+export interface Receipt { handle: number; completed: number[]; queueMs: number; libre: number; renewThrough: number }
+export function receiptCore(r: Receipt): Uint8Array {
   return concat(
-    viEncode(r.handle), rangesEncode(r.completadas), viEncode(r.colaMs),
-    viEncode(r.libre), viEncode(r.renovHasta),
+    viEncode(r.handle), rangesEncode(r.completed), viEncode(r.queueMs),
+    viEncode(r.libre), viEncode(r.renewThrough),
   );
 }
-export function reciboDecode(payload: Uint8Array): Recibo {
+export function receiptDecode(payload: Uint8Array): Receipt {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
   const rr = rangesDecode(payload, p); p = rr.next;
-  r = viDecode(payload, p); const colaMs = r.value; p = r.next;
+  r = viDecode(payload, p); const queueMs = r.value; p = r.next;
   r = viDecode(payload, p); const libre = r.value; p = r.next;
   r = viDecode(payload, p);
-  return { handle, completadas: rr.values, colaMs, libre, renovHasta: r.value };
+  return { handle, completed: rr.values, queueMs, libre, renewThrough: r.value };
 }
 
-export interface Soltar { handle: number; motivo: number; rangos: number[] }
-export function soltarCore(s: Soltar): Uint8Array {
-  return concat(viEncode(s.handle), [s.motivo], rangesEncode(s.rangos));
+export interface Release { handle: number; reason: number; ranges: number[] }
+export function releaseCore(s: Release): Uint8Array {
+  return concat(viEncode(s.handle), [s.reason], rangesEncode(s.ranges));
 }
-export function soltarDecode(payload: Uint8Array): Soltar {
+export function releaseDecode(payload: Uint8Array): Release {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  const motivo = payload[p] ?? 0; p += 1;
+  const reason = payload[p] ?? 0; p += 1;
   const rr = rangesDecode(payload, p);
-  return { handle, motivo, rangos: rr.values };
+  return { handle, reason, ranges: rr.values };
 }
 
-export interface Renovar { handle: number; orden: number; arriendoS: number; rangos: number[] }
-export function renovarCore(r: Renovar): Uint8Array {
-  return concat(viEncode(r.handle), viEncode(r.orden), viEncode(r.arriendoS), rangesEncode(r.rangos));
+export interface Renew { handle: number; order: number; leaseS: number; ranges: number[] }
+export function renewCore(r: Renew): Uint8Array {
+  return concat(viEncode(r.handle), viEncode(r.order), viEncode(r.leaseS), rangesEncode(r.ranges));
 }
-export function renovarDecode(payload: Uint8Array): Renovar {
+export function renewDecode(payload: Uint8Array): Renew {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const orden = r.value; p = r.next;
-  r = viDecode(payload, p); const arriendoS = r.value; p = r.next;
+  r = viDecode(payload, p); const order = r.value; p = r.next;
+  r = viDecode(payload, p); const leaseS = r.value; p = r.next;
   const rr = rangesDecode(payload, p);
-  return { handle, orden, arriendoS, rangos: rr.values };
+  return { handle, order, leaseS, ranges: rr.values };
 }
 
-export interface Auditar { handle: number; orden: number; hasta: number }
-export function auditarCore(a: Auditar): Uint8Array {
-  return concat(viEncode(a.handle), viEncode(a.orden), viEncode(a.hasta));
+export interface Audit { handle: number; order: number; through: number }
+export function auditCore(a: Audit): Uint8Array {
+  return concat(viEncode(a.handle), viEncode(a.order), viEncode(a.through));
 }
-export function auditarDecode(payload: Uint8Array): Auditar {
+export function auditDecode(payload: Uint8Array): Audit {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const orden = r.value; p = r.next;
+  r = viDecode(payload, p); const order = r.value; p = r.next;
   r = viDecode(payload, p);
-  return { handle, orden, hasta: r.value };
+  return { handle, order, through: r.value };
 }
 
-export interface Inventario {
-  handle: number; orden: number; hasta: number; pinceladas: number; kib: number; rangos: number[];
+export interface Inventory {
+  handle: number; order: number; through: number; brushCount: number; kib: number; ranges: number[];
 }
-export function inventarioCore(v: Inventario): Uint8Array {
+export function inventoryCore(v: Inventory): Uint8Array {
   return concat(
-    viEncode(v.handle), viEncode(v.orden), viEncode(v.hasta),
-    viEncode(v.pinceladas), viEncode(v.kib), rangesEncode(v.rangos),
+    viEncode(v.handle), viEncode(v.order), viEncode(v.through),
+    viEncode(v.brushCount), viEncode(v.kib), rangesEncode(v.ranges),
   );
 }
-export function inventarioDecode(payload: Uint8Array): Inventario {
+export function inventoryDecode(payload: Uint8Array): Inventory {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
-  r = viDecode(payload, p); const orden = r.value; p = r.next;
-  r = viDecode(payload, p); const hasta = r.value; p = r.next;
-  r = viDecode(payload, p); const pinceladas = r.value; p = r.next;
+  r = viDecode(payload, p); const order = r.value; p = r.next;
+  r = viDecode(payload, p); const through = r.value; p = r.next;
+  r = viDecode(payload, p); const brushCount = r.value; p = r.next;
   r = viDecode(payload, p); const kib = r.value; p = r.next;
   const rr = rangesDecode(payload, p);
-  return { handle, orden, hasta, pinceladas, kib, rangos: rr.values };
+  return { handle, order, through, brushCount, kib, ranges: rr.values };
 }

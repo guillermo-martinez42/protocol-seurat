@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { hash3 } from '@/shared/lib/hash3';
 import type { Work } from '@/entities/work/types';
-import { dimsOf, orientOf, titleOf } from '@/entities/work/types';
+import { workDims, orientOf, workTitle } from '@/entities/work/types';
 import type { Filter } from '@/entities/work/store';
 import { Icon } from '@/shared/ui/Icon';
 
@@ -74,8 +74,8 @@ export function GalleryGrid({ items, filter, onFilter, onOpen }: Props): JSX.Ele
               <Thumb work={w} />
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '0 10px' }}>
-              <span style={{ fontSize: 17, fontWeight: 650, fontVariationSettings: "'wdth' 112" }}>{titleOf(w, i)}</span>
-              <span style={{ fontSize: 13, color: '#45464F', fontVariantNumeric: 'tabular-nums' }}>{dimsOf(w)}</span>
+              <span style={{ fontSize: 17, fontWeight: 650, fontVariationSettings: "'wdth' 112" }}>{workTitle(w, i)}</span>
+              <span style={{ fontSize: 13, color: '#45464F', fontVariantNumeric: 'tabular-nums' }}>{workDims(w)}</span>
             </div>
           </div>
         ))}

@@ -79,8 +79,8 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
   const t0 = performance.now();
   const req = ev.data;
   try {
-    const w = req.semilla ? req.semillaAncho : 256;
-    const h = req.semilla ? req.semillaAlto : 256;
+    const w = req.seed ? req.semillaAncho : 256;
+    const h = req.seed ? req.semillaAlto : 256;
     const px = w * h;
     const planes: Record<'Y' | 'Co' | 'Cg', Int16Array> = {
       Y: new Int16Array(px),
@@ -88,7 +88,7 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
       Cg: new Int16Array(px),
     };
 
-    if (req.semilla) {
+    if (req.seed) {
       const raw = await inflateRaw(new Uint8Array(req.bands[0] ?? new ArrayBuffer(0)));
       let p = 0;
       for (const ch of ['Y', 'Co', 'Cg'] as const) {
@@ -175,22 +175,22 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
     }
 
     const out: SynthResult = {
-      entrega: req.entrega,
+      delivery: req.delivery,
       ok: true,
       rgba: rgba.buffer as ArrayBuffer,
-      ancho: w,
-      alto: h,
+      width: w,
+      height: h,
       elapsedMs: performance.now() - t0,
     };
     self.postMessage(out, { transfer: [out.rgba as ArrayBuffer] });
   } catch (e) {
     const out: SynthResult = {
-      entrega: req.entrega,
+      delivery: req.delivery,
       ok: false,
       error: e instanceof Error ? e.message : String(e),
       rgba: null,
-      ancho: 0,
-      alto: 0,
+      width: 0,
+      height: 0,
       elapsedMs: performance.now() - t0,
     };
     self.postMessage(out);

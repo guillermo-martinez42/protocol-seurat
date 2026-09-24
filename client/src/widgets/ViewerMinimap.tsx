@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { clamp } from '@/shared/lib/clamp';
-import { pinceladaIdSplit } from '@/shared/proto/pincelada';
+import { splitBrushId } from '@/shared/proto/brush';
 import type { DeliverySink } from '@/app/providers/delivery-sink';
 import type { ChromeApi, ViewSync } from './ViewerChrome';
 
@@ -39,14 +39,14 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
 
     let hasThumb = false;
     if (sink) {
-      const brushes = [...sink.book.byEntrega.values()]
+      const brushes = [...sink.book.byDelivery.values()]
         .filter((r) => r.rgba !== null)
-        .sort((a, b) => b.estrato - a.estrato);
+        .sort((a, b) => b.stratum - a.stratum);
       if (brushes.length > 0) {
         hasThumb = true;
         for (const rec of brushes) {
           if (!rec.rgba) continue;
-          const { s, bx, by } = pinceladaIdSplit(rec.pinceladaId);
+          const { s, bx, by } = splitBrushId(rec.brushId);
           const size = 256 * 2 ** s;
           c.drawImage(rec.rgba, bx * size * k, by * size * k, size * k, size * k);
         }

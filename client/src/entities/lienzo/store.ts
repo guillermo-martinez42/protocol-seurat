@@ -1,20 +1,20 @@
-import type { Concesion } from '@/shared/proto/messages';
+import type { Concession } from '@/shared/proto/messages';
 
-export interface LienzoInfo {
+export interface CanvasInfo {
   handle: number;
-  obraId: string;
-  ancho: number;
-  alto: number;
+  workId: string;
+  width: number;
+  height: number;
   estratos: number;
-  edicion: number;
+  edition: number;
   techoEstrato: number;
   techoBandas: number;
   semillaAncho: number;
   semillaAlto: number;
-  concesion: Concesion | null;
+  concession: Concession | null;
 }
 
-export function permite(c: Concesion, s: number, b1: number): boolean {
+export function permite(c: Concession, s: number, b1: number): boolean {
   if (s > c.estratoMin) return true;
   if (s === c.estratoMin) return b1 <= c.bandasMax;
   return false;
@@ -22,8 +22,8 @@ export function permite(c: Concesion, s: number, b1: number): boolean {
 
 export function makeLienzo(
   handle: number,
-  obraId: string,
-  dims: Omit<LienzoInfo, 'handle' | 'obraId' | 'concesion'>,
-): LienzoInfo {
-  return { handle, obraId, ...dims, concesion: null };
+  workId: string,
+  dims: Omit<CanvasInfo, 'handle' | 'workId' | 'concession'>,
+): CanvasInfo {
+  return { handle, workId, ...dims, concession: null };
 }

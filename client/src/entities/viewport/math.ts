@@ -16,7 +16,7 @@ export function strataFor(ideal: number, top: number): { s: number; phi: number 
   return { s, phi: ideal - s };
 }
 
-export function bandasFor(phi: number): number {
+export function bandsFor(phi: number): number {
   return 4 - Math.min(3, Math.floor(phi * 4));
 }
 

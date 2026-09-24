@@ -10,7 +10,7 @@ import { useSeurat } from '@/app/providers/SeuratProvider';
 import { goGallery, goViewer } from '@/app/router';
 import { patchUi, useUi } from '@/app/store';
 import { stepIndex, counterLabel } from '@/features/navigate-work';
-import { dimsOf, mpOf, titleOf } from '@/entities/work/types';
+import { workDims, workMp, workTitle } from '@/entities/work/types';
 import { fmtPct } from '@/shared/lib/zoom';
 import { Icon } from '@/shared/ui/Icon';
 
@@ -38,22 +38,22 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
 
   useEffect(() => {
     const onVis = (): void => {
-      if (document.visibilityState === 'hidden' && seurat.abierta && seurat.miradas) {
-        seurat.miradas.oculta(seurat.abierta.handle);
+      if (document.visibilityState === 'hidden' && seurat.opened && seurat.gazeService) {
+        seurat.gazeService.hidden(seurat.opened.handle);
       }
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [seurat.abierta, seurat.miradas]);
+  }, [seurat.opened, seurat.gazeService]);
 
-  const iw = work ? work.ancho : 3600;
-  const ih = work ? work.alto : 2400;
-  const title = work ? titleOf(work, idx) : 'Plate 01';
-  const dims = work ? dimsOf(work) : '';
-  const mp = work ? mpOf(work) : '';
+  const iw = work ? work.width : 3600;
+  const ih = work ? work.height : 2400;
+  const title = work ? workTitle(work, idx) : 'Plate 01';
+  const dims = work ? workDims(work) : '';
+  const mp = work ? workMp(work) : '';
 
   const err = seurat.lastError?.fatal === 1 || seurat.status.startsWith('offline');
-  const loading = !err && (seurat.paintTick === 0 || !seurat.abierta);
+  const loading = !err && (seurat.paintTick === 0 || !seurat.opened);
   const ready = !loading && !err;
 
   const pct = view?.pct ?? 100;
@@ -101,10 +101,10 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
       <ViewerChrome
         iw={iw}
         ih={ih}
-        handle={seurat.abierta?.handle ?? 0}
+        handle={seurat.opened?.handle ?? 0}
         sink={seurat.sink}
         paintTick={seurat.paintTick}
-        miradas={seurat.miradas}
+        gazeService={seurat.gazeService}
         loupe={ui.loupe}
         dots={ui.dots}
         dotThreshold={DOT_THRESHOLD}
@@ -123,10 +123,10 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         }}
         onSync={(s) => {
           setView(s);
-          if (!miradaInit.current && seurat.miradas && seurat.abierta) {
+          if (!miradaInit.current && seurat.gazeService && seurat.opened) {
             miradaInit.current = true;
-            seurat.miradas.motion({
-              handle: seurat.abierta.handle,
+            seurat.gazeService.motion({
+              handle: seurat.opened.handle,
               x0: 0, y0: 0, x1: iw, y1: ih,
               vw: Math.round(s.w), vh: Math.round(s.h), mflags: 0,
             });

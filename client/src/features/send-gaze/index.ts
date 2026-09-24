@@ -1,22 +1,22 @@
 import { MIRADA_QUIETA_IDLE_MS } from '@/shared/config/constants';
-import { miradaCore, T, type Mirada } from '@/shared/proto/messages';
+import { gazeCore, T, type Gaze } from '@/shared/proto/messages';
 import { concat, viEncode } from '@/shared/proto/varint';
 import type { SeuratTransport } from '@/shared/api/transport';
 
-export const MFLAGS_OCULTA = 0x01;
-export const MFLAGS_QUIETA = 0x02;
+export const MFLAGS_HIDDEN = 0x01;
+export const MFLAGS_STILL = 0x02;
 
-export class MiradaSender {
+export class GazeSender {
   private seq = 0;
-  private pending: Mirada | null = null;
-  private last: Mirada | null = null;
+  private pending: Gaze | null = null;
+  private last: Gaze | null = null;
   private raf = 0;
   private idleTimer = 0;
   private lastSentAt = 0;
 
   constructor(private transport: () => SeuratTransport | null) {}
 
-  motion(m: Omit<Mirada, 'seq'>): void {
+  motion(m: Omit<Gaze, 'seq'>): void {
     this.seq += 1;
     this.pending = { ...m, seq: this.seq };
     this.last = this.pending;
@@ -39,26 +39,26 @@ export class MiradaSender {
     this.idleTimer = setTimeout(() => this.flush(true), MIRADA_QUIETA_IDLE_MS) as unknown as number;
   }
 
-  oculta(handle: number): void {
+  hidden(handle: number): void {
     this.seq += 1;
     const t = this.transport();
     if (!t) return;
-    const core = miradaCore({ handle, seq: this.seq, x0: 0, y0: 0, x1: 0, y1: 0, vw: 0, vh: 0, mflags: MFLAGS_OCULTA });
+    const core = gazeCore({ handle, seq: this.seq, x0: 0, y0: 0, x1: 0, y1: 0, vw: 0, vh: 0, mflags: MFLAGS_HIDDEN });
     t.sendControl(concat(viEncode(T.MIRADA), viEncode(core.length), core));
     this.pending = null;
   }
 
-  private flush(quieta: boolean): void {
+  private flush(still: boolean): void {
     const t = this.transport();
-    const m = this.pending ?? (quieta ? this.last : null);
+    const m = this.pending ?? (still ? this.last : null);
     if (!t || !m) return;
     this.pending = null;
     this.lastSentAt = performance.now();
-    if (quieta) {
-      const core = miradaCore({ ...m, mflags: m.mflags | MFLAGS_QUIETA });
+    if (still) {
+      const core = gazeCore({ ...m, mflags: m.mflags | MFLAGS_STILL });
       t.sendControl(concat(viEncode(T.MIRADA), viEncode(core.length), core));
     } else {
-      const core = miradaCore(m);
+      const core = gazeCore(m);
       if (t.datagramas) t.sendMiradaDatagram(concat(viEncode(T.MIRADA), core));
       else t.sendMiradaDatagram(core);
     }

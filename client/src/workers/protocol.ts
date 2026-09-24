@@ -1,21 +1,21 @@
 export interface SynthRequest {
-  entrega: number;
-  estrato: number;
+  delivery: number;
+  stratum: number;
   qY: number;
   qC: number;
-  semilla: boolean;
+  seed: boolean;
   semillaAncho: number;
   semillaAlto: number;
   bands: ArrayBuffer[];
 }
 
 export interface SynthResult {
-  entrega: number;
+  delivery: number;
   ok: boolean;
   error?: string;
   rgba: ArrayBuffer | null;
-  ancho: number;
-  alto: number;
+  width: number;
+  height: number;
   elapsedMs: number;
 }
 

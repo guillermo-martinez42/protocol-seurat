@@ -12,9 +12,9 @@ import {
   planCore,
   ecoDecode,
   abrirDecode,
-  reciboDecode,
-  soltarDecode,
-  inventarioDecode,
+  receiptDecode,
+  releaseDecode,
+  inventoryDecode,
 } from '@/shared/proto/messages';
 import { concat, viDecode } from '@/shared/proto/varint';
 import type { SeuratTransport } from '@/shared/api/transport';
@@ -97,29 +97,29 @@ describe('SessionClient', () => {
     (client as unknown as { wire(t: SeuratTransport): void }).wire(t);
 
     const b = {
-      version: 1, caps: 3, sesionId: 100n, lado: 256, arriendoS: 120,
-      latidoS: 15, maxEnVuelo: 12, sesionMaxPinceladas: 1024, ficha: new Uint8Array(32), reanudada: [],
+      version: 1, caps: 3, sessionId: 100n, lado: 256, leaseS: 120,
+      latidoS: 15, maxEnVuelo: 12, sesionMaxPinceladas: 1024, ticket: new Uint8Array(32), resumed: [],
     };
     t.onControl?.(encodeFrame(T.BIENVENIDA, concat(bienvenidaCore(b), ...bienvenidaTlvs(b))));
     expect(bienvenidaOk).toBe(true);
 
     t.onControl?.(encodeFrame(T.OBRA, obraCore({
-      evento: 1, estado: 3, progreso: 100, edicion: 1, ancho: 1000, alto: 1000, estratos: 10, id: 'test', nombre: 'Test',
+      event: 1, estado: 3, progreso: 100, edition: 1, width: 1000, height: 1000, estratos: 10, id: 'test', name: 'Test',
     })));
     expect(obraOk).toBe(true);
 
     t.onControl?.(encodeFrame(T.ABIERTA, abiertaCore({
-      handle: 1, ancho: 1000, alto: 1000, estratos: 10, edicion: 1, techoEstrato: 0, techoBandas: 4, semillaAncho: 192, semillaAlto: 160,
+      handle: 1, width: 1000, height: 1000, estratos: 10, edition: 1, techoEstrato: 0, techoBandas: 4, semillaAncho: 192, semillaAlto: 160,
     })));
     expect(abiertaOk).toBe(true);
 
     t.onControl?.(encodeFrame(T.CONCESION, concesionCore({
-      handle: 1, epoca: 1, estratoMin: 7, bandasMax: 4, motivo: 0, maxPinceladas: 768, maxKib: 36864, arriendoS: 120,
+      handle: 1, epoch: 1, estratoMin: 7, bandasMax: 4, reason: 0, maxBrushes: 768, maxKiB: 36864, leaseS: 120,
     })));
     expect(concesionOk).toBe(true);
 
     t.onControl?.(encodeFrame(T.PLAN, planCore({
-      handle: 1, seqMirada: 1, evento: 0, primera: 1, previstas: 10, regulacion: 0,
+      handle: 1, gazeSeq: 1, event: 0, first: 1, expectedCount: 10, throttle: 0,
     })));
     expect(planOk).toBe(true);
   });
@@ -133,27 +133,27 @@ describe('SessionClient', () => {
     });
     (client as unknown as { transport: SeuratTransport }).transport = t;
 
-    client.openObra('obra-42');
+    client.openObra('work-42');
     expect(sentControl.length).toBe(1);
-    expect(abrirDecode(sentControl[0]!.slice(2))).toBe('obra-42');
+    expect(abrirDecode(sentControl[0]!.slice(2))).toBe('work-42');
 
     client.sendRecibo(1, [1, 2, 3], 20, 700, 5);
     expect(sentControl.length).toBe(2);
-    const rec = reciboDecode(sentControl[1]!.slice(2));
+    const rec = receiptDecode(sentControl[1]!.slice(2));
     expect(rec.handle).toBe(1);
-    expect(rec.colaMs).toBe(20);
+    expect(rec.queueMs).toBe(20);
     expect(rec.libre).toBe(700);
 
     client.sendSoltar(1, 1, [4, 5]);
     expect(sentControl.length).toBe(3);
-    const sol = soltarDecode(sentControl[2]!.slice(2));
-    expect(sol.motivo).toBe(1);
-    expect(sol.rangos).toEqual([4, 5]);
+    const sol = releaseDecode(sentControl[2]!.slice(2));
+    expect(sol.reason).toBe(1);
+    expect(sol.ranges).toEqual([4, 5]);
 
-    client.sendInventario(1, 2, 10, 5, 200, [1, 2, 3]);
+    client.sendInventory(1, 2, 10, 5, 200, [1, 2, 3]);
     expect(sentControl.length).toBe(4);
-    const inv = inventarioDecode(sentControl[3]!.slice(2));
-    expect(inv.pinceladas).toBe(5);
+    const inv = inventoryDecode(sentControl[3]!.slice(2));
+    expect(inv.brushCount).toBe(5);
     expect(inv.kib).toBe(200);
   });
 });

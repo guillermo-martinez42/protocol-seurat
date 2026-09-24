@@ -7,9 +7,9 @@ import { flingTarget, panBy } from '@/features/pan-view';
 import { wheelZoom, zoomTarget } from '@/features/zoom-view';
 import { initialView, tickView } from '@/features/zoom-view/model';
 import { viewToRoi } from '@/entities/viewport/math';
-import { pinceladaIdSplit } from '@/shared/proto/pincelada';
+import { splitBrushId } from '@/shared/proto/brush';
 import type { DeliverySink } from '@/app/providers/delivery-sink';
-import type { MiradaSender } from '@/features/send-mirada';
+import type { GazeSender } from '@/features/send-gaze';
 
 export interface ViewSync {
   s: number;
@@ -47,7 +47,7 @@ interface Props {
   handle: number;
   sink: DeliverySink | null;
   paintTick: number;
-  miradas: MiradaSender | null;
+  gazeService: GazeSender | null;
   loupe: boolean;
   dots: boolean;
   dotThreshold: number;
@@ -58,7 +58,7 @@ interface Props {
 }
 
 interface BrushGeom {
-  entrega: number;
+  delivery: number;
   s: number;
   x: number;
   y: number;
@@ -156,18 +156,18 @@ export function ViewerChrome(props: Props): JSX.Element {
       const sink = P().sink;
       if (!sink) return [];
       const out: BrushGeom[] = [];
-      for (const rec of sink.book.byEntrega.values()) {
+      for (const rec of sink.book.byDelivery.values()) {
         if (!rec.rgba) continue;
-        const { s, bx, by } = pinceladaIdSplit(rec.pinceladaId);
+        const { s, bx, by } = splitBrushId(rec.brushId);
         const size = 256 * 2 ** s;
-        out.push({ entrega: rec.entrega, s, x: bx * size, y: by * size, size, bmp: rec.rgba });
+        out.push({ delivery: rec.delivery, s, x: bx * size, y: by * size, size, bmp: rec.rgba });
       }
       out.sort((a, b) => b.s - a.s);
       return out;
     }
 
     function gridFor(b: BrushGeom): { w: number; h: number; d: Uint8ClampedArray } | null {
-      const hit = st.grids.get(b.entrega);
+      const hit = st.grids.get(b.delivery);
       if (hit) return hit;
       if (st.grids.size > 64) st.grids.clear();
       try {
@@ -179,7 +179,7 @@ export function ViewerChrome(props: Props): JSX.Element {
         g.drawImage(b.bmp, 0, 0, 32, 32);
         const d = g.getImageData(0, 0, 32, 32).data;
         const e = { w: 32, h: 32, d };
-        st.grids.set(b.entrega, e);
+        st.grids.set(b.delivery, e);
         return e;
       } catch {
         return null;
@@ -389,10 +389,10 @@ export function ViewerChrome(props: Props): JSX.Element {
 
     function reportMirada(): void {
       const p = P();
-      if (!p.miradas) return;
+      if (!p.gazeService) return;
       const v = st.v;
       const roi = viewToRoi(v.s, v.tx, v.ty, { vw: W, vh: H }, p.iw, p.ih);
-      p.miradas.motion({ handle: p.handle, x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1, vw: Math.round(W), vh: Math.round(H), mflags: 0 });
+      p.gazeService.motion({ handle: p.handle, x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1, vw: Math.round(W), vh: Math.round(H), mflags: 0 });
     }
 
     function loop(): void {
