@@ -70,8 +70,8 @@ export class PreviewManager {
             const decoded = await decodeSeed(band0, w, height);
             setWorkPreview(id, decoded);
           }
-        } catch {
-          /* ignore decode error */
+        } catch (err) {
+          console.warn('Preview decode error for', id, err);
         } finally {
           this.client()?.closeHandle(handle);
           this.pump();
