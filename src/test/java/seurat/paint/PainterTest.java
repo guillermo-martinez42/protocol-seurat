@@ -23,6 +23,7 @@ public final class PainterTest {
     public static void main(String[] args) throws Exception {
         happyPath();
         dropsViolations();
+        purgeCancels();
         System.out.println("PainterTest OK");
     }
 
@@ -105,5 +106,15 @@ public final class PainterTest {
         TestKit.check(rig.mapping.deliveries.isEmpty(), "a/b violations dropped, got "
                 + rig.mapping.deliveries.size());
         thread.interrupt();
+    }
+
+    private static void purgeCancels() throws Exception {
+        Rig rig = rig();
+        rig.painter.enqueue(rig.canvas, List.of(
+                new PlanEntry(new BrushId(0, 0, 0), 0, 2, 1),
+                new PlanEntry(new BrushId(2, 0, 0), 0, 2, 1)));
+        Concession narrow = new Concession(2, 2, 4, 1, 768, 36864, 120);
+        var cancelled = rig.painter.purge(rig.canvas, narrow);
+        TestKit.check(cancelled.isEmpty(), "queue purged cleanly");
     }
 }

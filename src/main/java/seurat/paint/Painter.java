@@ -25,10 +25,11 @@ public final class Painter implements Runnable {
     private final Regulator regulator;
     private final DeliveryWriter writer;
     private final BudgetApplier applier;
+    private final InFlightDeliveries inFlight = new InFlightDeliveries();
 
     public Painter(Regulator regulator, BrushBudget budget, Metrics metrics) {
         this.regulator = regulator;
-        this.writer = new DeliveryWriter(metrics, globalSlots);
+        this.writer = new DeliveryWriter(metrics, globalSlots, inFlight);
         this.applier = new BudgetApplier(budget);
     }
 
@@ -54,7 +55,7 @@ public final class Painter implements Runnable {
         queue.removeIf(p -> p.canvas() == canvas
                 && (!next.allows(p.entry().brush(), p.entry().through())
                         || p.edition() != canvas.meta().edition()));
-        return seurat.proto.Ranges.empty();
+        return inFlight.purge(canvas, next);
     }
 
     @Override
@@ -111,6 +112,7 @@ public final class Painter implements Runnable {
             }
             canvas.session().stride += Math.max(1, delivery.bytes());
             Delivery done = delivery;
+            inFlight.add(canvas, done);
             Thread.ofVirtual().start(() -> writer.write(canvas, done));
         }
     }

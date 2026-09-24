@@ -21,10 +21,12 @@ import seurat.session.Delivery;
 final class DeliveryWriter {
     private final Metrics metrics;
     private final Semaphore globalSlots;
+    private final InFlightDeliveries inFlight;
 
-    DeliveryWriter(Metrics metrics, Semaphore globalSlots) {
+    DeliveryWriter(Metrics metrics, Semaphore globalSlots, InFlightDeliveries inFlight) {
         this.metrics = metrics;
         this.globalSlots = globalSlots;
+        this.inFlight = inFlight;
     }
 
     void write(Canvas canvas, Delivery delivery) {
@@ -57,7 +59,7 @@ final class DeliveryWriter {
             metrics.deliveries.increment();
             metrics.bytes.add(delivery.bytes());
             synchronized (canvas) {
-                if (canvas.advancePlan()) {
+                if (canvas.book().contains(delivery.number()) && canvas.advancePlan()) {
                     var planEnd = new MsgGaze.Plan(canvas.handle(), canvas.gazeSeq(),
                             ProtoCodes.PLAN_FIN, 0, 0, 0, canvas.book().lastNumber(),
                             null);
@@ -66,18 +68,23 @@ final class DeliveryWriter {
                 }
             }
         } catch (Exception ex) {
+            boolean wasInBook;
             synchronized (canvas) {
+                wasInBook = canvas.book().contains(delivery.number());
                 canvas.book().cancel(delivery.number());
             }
-            var cancel = new MsgGaze.Plan(canvas.handle(), canvas.gazeSeq(),
-                    ProtoCodes.PLAN_CANCELADAS, 0, 0, 0, 0,
-                    Ranges.of(delivery.number()));
-            try {
-                session.mapping().sendControl(
-                        new Frame(FrameType.PLAN, cancel.encode()).encode());
-            } catch (Exception ignored) {
+            if (wasInBook) {
+                var cancel = new MsgGaze.Plan(canvas.handle(), canvas.gazeSeq(),
+                        ProtoCodes.PLAN_CANCELADAS, 0, 0, 0, 0,
+                        Ranges.of(delivery.number()));
+                try {
+                    session.mapping().sendControl(
+                            new Frame(FrameType.PLAN, cancel.encode()).encode());
+                } catch (Exception ignored) {
+                }
             }
         } finally {
+            inFlight.remove(canvas, delivery);
             session.releaseSlot();
             globalSlots.release();
         }
