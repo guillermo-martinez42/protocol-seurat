@@ -10,7 +10,9 @@ import seurat.concession.GrantController;
 import seurat.config.SeuratConfig;
 import seurat.ingest.IngestJob;
 import seurat.observe.AuditLog;
+import seurat.proto.ProtoCodes;
 import seurat.session.Canvas;
+import seurat.session.Concession;
 import seurat.session.Session;
 import seurat.session.Sessions;
 
@@ -87,7 +89,7 @@ public final class MasterIntake {
         return list;
     }
 
-    /** Edition swap: point canvases at ed2, scrape ed1 without a barrier. */
+    /** Edition swap: point canvases at ed2, re-issue concession, replan without withdrawing. */
     private void substitute(String id) {
         WorkRecord work = catalog.get(id);
         if (work == null) {
@@ -95,10 +97,14 @@ public final class MasterIntake {
         }
         for (Session session : sessions.all()) {
             for (Canvas canvas : session.canvases().values()) {
-                if (canvas.workId().equals(id)) {
-                    canvas.setStore(work.store, work.meta);
-                    grants.withdraw(canvas);
-                }
+                if (!canvas.workId().equals(id)) continue;
+                canvas.setStore(work.store, work.meta);
+                long[] c = work.ceiling(session.role());
+                Concession prev = canvas.concession();
+                canvas.setConcession(new Concession(prev.epoch() + 1, (int) c[0], (int) c[1],
+                        ProtoCodes.MOT_POLITICA, prev.maxBrushes(), prev.maxKiB(), prev.leaseS()));
+                if (canvas.gaze() != null) grants.gaze(session, canvas, canvas.gaze());
+                else grants.open(session, canvas);
             }
         }
     }
