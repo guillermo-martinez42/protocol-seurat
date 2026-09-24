@@ -37,33 +37,54 @@ public final class MasterIntake {
 
     private void launch(String id, Path file) {
         try {
-            Path unpacked = file;
             if (file.toString().endsWith(".zip")) {
-                unpacked = unzip(file);
+                for (Path img : unzip(file)) {
+                    String name = img.getFileName().toString().replaceAll("\\.[^.]+$", "");
+                    new IngestJob(name, name, img, config.works, catalog,
+                            () -> substitute(name)).run();
+                }
+                return;
             }
             String name = id.replaceAll("\\.[^.]+$", "");
-            new IngestJob(name, name, unpacked, config.works, catalog,
+            new IngestJob(name, name, file, config.works, catalog,
                     () -> substitute(name)).run();
         } catch (Exception ex) {
             AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
         }
     }
 
-    private static Path unzip(Path zip) throws Exception {
+    private static java.util.List<Path> unzip(Path zip) throws Exception {
         Path dir = zip.getParent().resolve(zip.getFileName() + ".d");
         Files.createDirectories(dir);
+        java.util.List<Path> list = new java.util.ArrayList<>();
         try (var in = new java.util.zip.ZipFile(zip.toFile())) {
             var entries = in.entries();
             while (entries.hasMoreElements()) {
                 var entry = entries.nextElement();
-                if (!entry.isDirectory()) {
-                    Path out = dir.resolve(Path.of(entry.getName()).getFileName().toString());
-                    Files.copy(in.getInputStream(entry), out);
-                    return out;
+                if (entry.isDirectory()) {
+                    continue;
                 }
+                String base = Path.of(entry.getName()).getFileName().toString();
+                String lower = base.toLowerCase();
+                if (!lower.endsWith(".png") && !lower.endsWith(".jpg") && !lower.endsWith(".tif")) {
+                    continue;
+                }
+                Path out = dir.resolve(base);
+                if (!Files.exists(out) || Files.size(out) != entry.getSize()) {
+                    try (var is = in.getInputStream(entry)) {
+                        Files.copy(is, out, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    }
+                }
+                list.add(out);
             }
         }
-        throw new java.io.IOException("empty zip");
+        if (list.isEmpty()) {
+            throw new java.io.IOException("no images in zip");
+        }
+        list.sort(java.util.Comparator.comparingLong(p -> {
+            try { return Files.size(p); } catch (Exception e) { return 0L; }
+        }));
+        return list;
     }
 
     /** Edition swap: point canvases at ed2, scrape ed1 without a barrier. */

@@ -9,12 +9,13 @@ final class StaticFiles {
     private final Path root;
 
     StaticFiles(Path root) {
-        this.root = root;
+        this.root = root.toAbsolutePath().normalize();
     }
 
     byte[] get(String path) throws IOException {
-        String rel = path.equals("/") ? "/index.html" : path;
-        Path file = root.resolve(rel.substring(1)).normalize();
+        String clean = path.startsWith("/") ? path.substring(1) : path;
+        String rel = clean.isEmpty() ? "index.html" : clean;
+        Path file = root.resolve(rel).normalize();
         if (!file.startsWith(root) || !Files.isRegularFile(file)) {
             return null;
         }

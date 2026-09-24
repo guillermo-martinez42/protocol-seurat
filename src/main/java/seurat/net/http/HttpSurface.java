@@ -54,7 +54,10 @@ public final class HttpSurface {
         if (body == null) {
             return json(404, "{\"error\":\"no existe\"}");
         }
-        return new Response(200, StaticFiles.contentType(path), body);
+        String type = (!path.contains(".") || path.equals("/"))
+                ? "text/html; charset=utf-8"
+                : StaticFiles.contentType(path);
+        return new Response(200, type, body);
     }
 
     private Response newSession(Request req) {
