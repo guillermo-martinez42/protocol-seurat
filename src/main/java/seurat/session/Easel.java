@@ -56,13 +56,13 @@ public final class Easel implements Runnable {
             if (session != null) {
                 fail(session, fail.code, fail.refType);
             }
-            close(session);
         } catch (Exception ex) {
             Log.error("session", "Session error [session " + (session == null ? "?" : session.id())
                     + "]: " + ex.getMessage(), ex);
             if (session != null) {
                 fail(session, ProtoCodes.ERR_INTERNO, 0);
             }
+        } finally {
             close(session);
         }
     }

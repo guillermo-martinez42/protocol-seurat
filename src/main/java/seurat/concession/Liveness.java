@@ -43,7 +43,11 @@ public final class Liveness {
                     close(session, fail.code, fail.refType);
                     break;
                 } catch (RuntimeException ex) {
-                    Log.error("liveness", "Session " + session.id() + " unexpected liveness error", ex);
+                    if (ex.getCause() instanceof java.net.SocketException) {
+                        Log.info("liveness", "Session " + session.id() + " connection lost: " + ex.getCause().getMessage());
+                    } else {
+                        Log.error("liveness", "Session " + session.id() + " unexpected liveness error", ex);
+                    }
                     close(session, ProtoCodes.ERR_INTERNO, 0);
                     break;
                 }
