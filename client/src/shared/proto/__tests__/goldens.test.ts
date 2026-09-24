@@ -1,0 +1,220 @@
+import { describe, expect, it } from 'vitest';
+import { concat, u64Decode, u64Encode, viDecode, viDecodeBig, viEncode } from '@/shared/proto/varint';
+import { rangesDecode, rangesEncode, rangesEqual } from '@/shared/proto/ranges';
+import { decodeFrame, encodeFrame, FatalProtocolError } from '@/shared/proto/frame';
+import {
+  T,
+  bienvenidaCore,
+  bienvenidaDecode,
+  bienvenidaTlvs,
+  concesionCore,
+  concesionDecode,
+  miradaCore,
+  miradaDecode,
+  planCore,
+  planDecode,
+  raspadoCore,
+  raspadoDecode,
+  reciboCore,
+  reciboDecode,
+  renovarCore,
+  renovarDecode,
+  saludoCore,
+  saludoDecode,
+  saludoTlvs,
+} from '@/shared/proto/messages';
+import { parsePinceladaHeader, pinceladaIdMake, pinceladaIdSplit } from '@/shared/proto/pincelada';
+
+function hex(b: Uint8Array): string {
+  return Array.from(b).map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+function rangeList(lo: number, hi: number): number[] {
+  const out: number[] = [];
+  for (let n = lo; n <= hi; n++) out.push(n);
+  return out;
+}
+
+describe('varint (QUIC minimal encode)', () => {
+  it('encodes RFC vectors', () => {
+    expect(hex(Uint8Array.from(viEncode(37)))).toBe('25');
+    expect(hex(Uint8Array.from(viEncode(15293)))).toBe('7bbd');
+    expect(hex(Uint8Array.from(viEncode(494878333)))).toBe('9d7f3e7d');
+    expect(hex(Uint8Array.from(viEncode(151288809941952652n)))).toBe('c2197c5eff14e88c');
+    expect(viDecodeBig(Uint8Array.from([0xc2, 0x19, 0x7c, 0x5e, 0xff, 0x14, 0xe8, 0x8c]), 0).value).toBe(
+      151288809941952652n,
+    );
+  });
+  it('accepts non-minimal 0x4025 = 37', () => {
+    const r = viDecode(Uint8Array.from([0x40, 0x25]), 0);
+    expect(r.value).toBe(37);
+    expect(r.next).toBe(2);
+  });
+  it('round-trips boundaries', () => {
+    for (const v of [0, 63, 64, 16383, 16384, 1073741823, 1073741824, 2 ** 40]) {
+      expect(viDecode(Uint8Array.from(viEncode(v)), 0).value).toBe(v);
+    }
+  });
+  it('u64 big-endian', () => {
+    const r = u64Decode(Uint8Array.from(u64Encode(0x3a915e0c77d214b8n)), 0);
+    expect(r.value).toBe(0x3a915e0c77d214b8n);
+  });
+});
+
+describe('ranges (SACK)', () => {
+  it('mayor 0 = empty', () => {
+    const r = rangesDecode(Uint8Array.from([0x00]), 0);
+    expect(r.values).toEqual([]);
+  });
+  it('RECIBO [45,51]+[53,60] = 3c 01 07 00 06', () => {
+    const enc = rangesEncode([...rangeList(45, 51), ...rangeList(53, 60)]);
+    expect(hex(enc)).toBe('3c01070006');
+    expect(rangesDecode(enc, 0).values).toEqual([...rangeList(45, 51), ...rangeList(53, 60)]);
+  });
+  it('RASPADO [1,256] = 41 00 00 40 ff', () => {
+    const enc = rangesEncode(rangeList(1, 256));
+    expect(hex(enc)).toBe('41000040ff');
+  });
+  it('exact equality', () => {
+    expect(rangesEqual([1, 2, 3], [3, 2, 1])).toBe(true);
+    expect(rangesEqual([1, 2], [1, 2, 3])).toBe(false);
+  });
+});
+
+describe('frame rules', () => {
+  it('rejects frames over 64 KiB', () => {
+    expect(() => encodeFrame(0x01, new Uint8Array(65537))).toThrow(FatalProtocolError);
+  });
+  it('unknown mandatory tipo is fatal ERROR 1', () => {
+    const raw = concat(viEncode(0x09), viEncode(1), new Uint8Array([0]));
+    expect(() => decodeFrame(raw, () => -1)).toThrow(FatalProtocolError);
+  });
+  it('optional tipo >= 0x40 is skipped', () => {
+    const raw = concat(viEncode(0x40), viEncode(1), new Uint8Array([0]));
+    expect(decodeFrame(raw, () => -1)).toBeNull();
+  });
+  it('unknown TLV tags are skipped', () => {
+    const token = new Uint8Array(32).fill(7);
+    const core = saludoCore({ verMin: 1, verMax: 1, caps: 3, memMib: 256, token });
+    const extra = concat(viEncode(0x7f), viEncode(2), new Uint8Array([1, 2]));
+    const raw = encodeFrame(T.SALUDO, core, [extra]);
+    const f = decodeFrame(raw, () => core.length);
+    expect(f?.tlvs.length).toBe(1);
+    expect(saludoDecode(concat(core, extra)).token).toEqual(token);
+  });
+});
+
+describe('spec 3.4 goldens', () => {
+  const token = new Uint8Array(32).map((_, i) => (0xde + i * 31) & 0xff);
+  const ficha = new Uint8Array(32).map((_, i) => (0x7a + i * 17) & 0xff);
+
+  it('SALUDO core is 38 bytes with exact prefix', () => {
+    const core = saludoCore({ verMin: 1, verMax: 1, caps: 3, memMib: 256, token });
+    expect(core.length).toBe(38);
+    expect(hex(core.slice(0, 6))).toBe('010103410020');
+    const frame = encodeFrame(T.SALUDO, core);
+    expect(frame.length).toBe(40);
+    expect(hex(frame.slice(0, 2))).toBe('0126');
+    expect(saludoDecode(core)).toMatchObject({ verMin: 1, verMax: 1, caps: 3, memMib: 256 });
+  });
+  it('BIENVENIDA payload is 52 bytes', () => {
+    const b = {
+      version: 1, caps: 3, sesionId: 0x3a915e0c77d214b8n, lado: 256, arriendoS: 120,
+      latidoS: 15, maxEnVuelo: 12, sesionMaxPinceladas: 1024, ficha, reanudada: [] as number[],
+    };
+    const payload = concat(bienvenidaCore(b), ...bienvenidaTlvs(b));
+    expect(payload.length).toBe(52);
+    expect(hex(encodeFrame(T.BIENVENIDA, payload).slice(0, 2))).toBe('0234');
+    const back = bienvenidaDecode(payload);
+    expect(back.sesionId).toBe(0x3a915e0c77d214b8n);
+    expect(back.ficha).toEqual(ficha);
+  });
+  it('MIRADA datagram is 24 bytes exact', () => {
+    const dg = concat(
+      viEncode(T.MIRADA),
+      miradaCore({ handle: 1, seq: 8, x0: 65536, y0: 49152, x1: 69376, y1: 51312, vw: 1920, vh: 1080, mflags: 0 }),
+    );
+    expect(dg.length).toBe(24);
+    expect(hex(dg)).toBe('200108800100008000c00080010f008000c8704780443800');
+    expect(miradaDecode(dg.slice(1))).toMatchObject({ handle: 1, seq: 8, x0: 65536, vw: 1920, mflags: 0 });
+  });
+  it('CONCESION sketch exact bytes', () => {
+    const frame = encodeFrame(T.CONCESION, concesionCore({
+      handle: 1, epoca: 1, estratoMin: 7, bandasMax: 4, motivo: 0,
+      maxPinceladas: 768, maxKib: 36864, arriendoS: 120,
+    }));
+    expect(hex(frame)).toBe('210d01010704004300800090004078');
+    expect(concesionDecode(frame.slice(2))).toMatchObject({ epoca: 1, estratoMin: 7, bandasMax: 4 });
+  });
+  it('PLAN INICIO primera 45 previstas 212 exact', () => {
+    const frame = encodeFrame(T.PLAN, planCore({ handle: 1, seqMirada: 8, evento: 0, primera: 45, previstas: 212, regulacion: 0 }));
+    expect(hex(frame)).toBe('23070108002d40d400');
+    expect(planDecode(frame.slice(2))).toMatchObject({ evento: 0, primera: 45, previstas: 212 });
+  });
+  it('RECIBO [45,51]+[53,60] exact', () => {
+    const frame = encodeFrame(T.RECIBO, reciboCore({
+      handle: 1, completadas: [...rangeList(45, 51), ...rangeList(53, 60)], colaMs: 40, libre: 708, renovHasta: 0,
+    }));
+    expect(hex(frame)).toBe('260a013c010700062842c400');
+    const back = reciboDecode(frame.slice(2));
+    expect(back.completadas.length).toBe(15);
+    expect(back).toMatchObject({ colaMs: 40, libre: 708 });
+  });
+  it('RASPADO [1,256] exact', () => {
+    const frame = encodeFrame(T.RASPADO, raspadoCore({
+      handle: 1, orden: 3, epoca: 3, hasta: 289, raspadas: 28, liberadasKib: 216, conservadas: rangeList(1, 256),
+    }));
+    expect(hex(frame)).toBe('250d01030341211c40d841000040ff');
+    const back = raspadoDecode(frame.slice(2));
+    expect(back).toMatchObject({ orden: 3, epoca: 3, hasta: 289, raspadas: 28, liberadasKib: 216 });
+    expect(back.conservadas.length).toBe(256);
+  });
+  it('RENOVAR exact', () => {
+    const frame = encodeFrame(T.RENOVAR, renovarCore({
+      handle: 1, orden: 12, arriendoS: 120, rangos: [...rangeList(1, 256), ...rangeList(290, 336)],
+    }));
+    expect(hex(frame)).toBe('280b010c40784150012e2040ff');
+    expect(renovarDecode(frame.slice(2))).toMatchObject({ orden: 12, arriendoS: 120 });
+  });
+  it('SALUDO REANUDAR largo 89 with TLV 0x01/0x31', () => {
+    const s = {
+      verMin: 1, verMax: 1, caps: 3, memMib: 256, token,
+      reanudar: {
+        sesionAnterior: 0x3a915e0c77d214b8n, ficha,
+        claims: [{ handle: 1, rangos: [...rangeList(1, 256), ...rangeList(290, 336)] }],
+      },
+    };
+    const frame = encodeFrame(T.SALUDO, saludoCore(s), saludoTlvs(s));
+    expect(hex(frame.slice(0, 3))).toBe('014059');
+    expect(frame.length).toBe(3 + 89);
+    const back = saludoDecode(frame.slice(3));
+    expect(back.reanudar?.claims[0]?.rangos.length).toBe(303);
+  });
+});
+
+describe('pincelada header', () => {
+  it('parses entrega 64 P(1,131,98)', () => {
+    const head = concat(
+      viEncode(0x01), viEncode(1), viEncode(64),
+      (() => {
+        const b = new Uint8Array(8);
+        const v = new DataView(b.buffer);
+        v.setBigUint64(0, 0x010000000000680dn);
+        return b;
+      })(),
+      new Uint8Array([0x02]), viEncode(2), new Uint8Array([4, 6]), viEncode(2),
+      new Uint8Array([0x64, 0x7c, 0xbe, 0x67, 0x07, 0x62, 0x9c, 0x02]),
+      viEncode(6496), viEncode(5873),
+    );
+    const h = parsePinceladaHeader(head);
+    expect(h.entrega).toBe(64);
+    expect(h.pinceladaId).toBe(0x010000000000680dn);
+    expect([h.desde, h.hasta]).toEqual([0, 2]);
+    expect(h.epoca).toBe(2);
+    expect([h.qY, h.qC]).toEqual([4, 6]);
+    expect(h.largos).toEqual([6496, 5873]);
+    const s = pinceladaIdSplit(h.pinceladaId);
+    expect(s).toMatchObject({ s: 1, bx: 131, by: 98 });
+    expect(pinceladaIdMake(1, 131, 98)).toBe(0x010000000000680dn);
+  });
+});

@@ -1,0 +1,73 @@
+import { MAX_FRAME_BYTES } from '../config/constants';
+import { concat, viDecode, viEncode } from './varint';
+
+export interface Tlv {
+  tag: number;
+  value: Uint8Array;
+}
+
+export interface Frame {
+  tipo: number;
+  payload: Uint8Array;
+  tlvs: Tlv[];
+}
+
+export class FatalProtocolError extends Error {
+  code = 1;
+  constructor(msg: string) {
+    super(msg);
+    this.name = 'FatalProtocolError';
+  }
+}
+
+export function parseTlvs(tail: Uint8Array): Tlv[] {
+  const out: Tlv[] = [];
+  let pos = 0;
+  while (pos < tail.length) {
+    const t = viDecode(tail, pos);
+    const l = viDecode(tail, t.next);
+    const end = l.next + l.value;
+    if (end > tail.length) throw new FatalProtocolError('TLV truncated');
+    out.push({ tag: t.value, value: tail.slice(l.next, end) });
+    pos = end;
+  }
+  return out;
+}
+
+export function tlvEncode(tag: number, value: Uint8Array): Uint8Array {
+  return concat(viEncode(tag), viEncode(value.length), value);
+}
+
+export function encodeFrame(tipo: number, core: Uint8Array, tlvs: Uint8Array[] = []): Uint8Array {
+  const payload = concat(core, ...tlvs);
+  if (payload.length > MAX_FRAME_BYTES) throw new FatalProtocolError('frame exceeds 64 KiB');
+  return concat(viEncode(tipo), viEncode(payload.length), payload);
+}
+
+export function decodeFrame(bytes: Uint8Array, coreLength: (payload: Uint8Array) => number): Frame | null {
+  let pos = 0;
+  const t = viDecode(bytes, pos);
+  pos = t.next;
+  const l = viDecode(bytes, pos);
+  pos = l.next;
+  if (l.value > MAX_FRAME_BYTES) throw new FatalProtocolError('frame exceeds 64 KiB');
+  if (pos + l.value > bytes.length) throw new FatalProtocolError('frame truncated');
+  const payload = bytes.slice(pos, pos + l.value);
+  const known = coreLength(payload);
+  if (known < 0) {
+    if (t.value < 0x40) throw new FatalProtocolError('ERROR 1: unknown mandatory type');
+    return null;
+  }
+  return { tipo: t.value, payload, tlvs: parseTlvs(payload.slice(known)) };
+}
+
+export function splitFrame(bytes: Uint8Array): { tipo: number; payload: Uint8Array; total: number } {
+  let pos = 0;
+  const t = viDecode(bytes, pos);
+  pos = t.next;
+  const l = viDecode(bytes, pos);
+  pos = l.next;
+  if (l.value > MAX_FRAME_BYTES) throw new FatalProtocolError('frame exceeds 64 KiB');
+  if (pos + l.value > bytes.length) throw new Error('frame: need more bytes');
+  return { tipo: t.value, payload: bytes.slice(pos, pos + l.value), total: pos + l.value };
+}
