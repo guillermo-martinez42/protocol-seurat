@@ -10,6 +10,7 @@ public class LogTest {
     public static void main(String[] args) {
         testLogLevelParsing();
         testLevelFiltering();
+        testStandardizedTagSize();
         testExceptionLogging();
         testAuditLogIntegration();
         testProtoNames();
@@ -42,7 +43,7 @@ public class LogTest {
             Log.warn("test", "warning message");
             String out = baos.toString(StandardCharsets.UTF_8);
             assert out.contains("WARN") : "Expected WARN in output";
-            assert out.contains("[test]") : "Expected tag in output";
+            assert out.contains("[test      ]") : "Expected standardized tag in output";
             assert out.contains("warning message") : "Expected message in output";
 
             baos.reset();
@@ -54,6 +55,32 @@ public class LogTest {
         } finally {
             Log.setOutput(System.out);
             Log.setLevel(LogLevel.INFO);
+        }
+    }
+
+    private static void testStandardizedTagSize() {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream ps = new PrintStream(baos, true, StandardCharsets.UTF_8);
+        Log.setOutput(ps);
+        try {
+            Log.info("ws", "short tag message");
+            Log.info("catalog", "medium tag message");
+            Log.info("concession", "long tag message");
+            String[] lines = baos.toString(StandardCharsets.UTF_8).split("\\R");
+            assert lines.length >= 3 : "Expected 3 log lines";
+            for (String rawLine : lines) {
+                if (rawLine.isBlank()) continue;
+                String line = rawLine.replaceAll("\u001B\\[[0-9;]*m", "");
+                int openBracket = line.indexOf('[');
+                int closeBracket = line.indexOf(']');
+                assert openBracket == 30 : "Opening bracket not at column 30: " + openBracket;
+                assert closeBracket == 41 : "Closing bracket not at column 41: " + closeBracket;
+                assert closeBracket - openBracket + 1 == Log.TAG_WIDTH + 2
+                        : "Tag block width mismatch: " + (closeBracket - openBracket + 1);
+                assert line.length() > 43 : "Line too short for message: " + line;
+            }
+        } finally {
+            Log.setOutput(System.out);
         }
     }
 

@@ -6,6 +6,9 @@ import java.time.format.DateTimeFormatter;
 
 /** Structured console logger with levels, timestamps, tags, and colors. */
 public final class Log {
+    public static final int LEVEL_WIDTH = 5;
+    public static final int TAG_WIDTH = 10;
+
     private static volatile LogLevel currentLevel = LogLevel.INFO;
     private static volatile PrintStream target = System.out;
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
@@ -67,16 +70,18 @@ public final class Log {
             return;
         }
         String ts = LocalDateTime.now().format(FMT);
+        String paddedLevel = padRight(level.name(), LEVEL_WIDTH);
+        String paddedTag = padRight(tag != null ? tag : "", TAG_WIDTH);
         StringBuilder sb = new StringBuilder(128);
         if (COLOR) {
             sb.append("\u001B[90m").append(ts).append("\u001B[0m ")
-              .append(colorFor(level)).append(String.format("%-5s", level.name())).append("\u001B[0m ")
-              .append("\u001B[35m[").append(tag).append("]\u001B[0m ")
+              .append(colorFor(level)).append(paddedLevel).append("\u001B[0m ")
+              .append("\u001B[35m[").append(paddedTag).append("]\u001B[0m ")
               .append(msg);
         } else {
             sb.append(ts).append(" ")
-              .append(String.format("%-5s", level.name())).append(" ")
-              .append("[").append(tag).append("] ")
+              .append(paddedLevel).append(" ")
+              .append("[").append(paddedTag).append("] ")
               .append(msg);
         }
         PrintStream out = target;
@@ -84,6 +89,11 @@ public final class Log {
         if (t != null) {
             t.printStackTrace(out);
         }
+    }
+
+    private static String padRight(String s, int width) {
+        int pad = width - s.length();
+        return pad > 0 ? s + " ".repeat(pad) : s;
     }
 
     private static String colorFor(LogLevel level) {
