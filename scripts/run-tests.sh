@@ -2,7 +2,7 @@
 # Compiles and runs every Java test (JDK-only mains, `java -ea`).
 set -euo pipefail
 cd "$(dirname "$0")/.."
-OUT="target/test-classes"
+OUT=".seurat/build/test-classes"
 mkdir -p "$OUT"
 javac -d "$OUT" $(find src/main/java src/test/java -name '*.java')
 pass=0

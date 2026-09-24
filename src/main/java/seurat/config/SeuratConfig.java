@@ -50,9 +50,9 @@ public final class SeuratConfig {
         if (base == null) {
             base = Path.of(".");
         }
-        Path inbox = base.resolve(strOf(props, "inbox", "inbox"));
-        Path works = base.resolve(strOf(props, "works", "obras"));
-        Path coverage = base.resolve(strOf(props, "coverage", "cobertura"));
+        Path inbox = base.resolve(strOf(props, "inbox", ".seurat/runtime/inbox"));
+        Path works = base.resolve(strOf(props, "works", ".seurat/runtime/obras"));
+        Path coverage = base.resolve(strOf(props, "coverage", ".seurat/runtime/cobertura"));
         Files.createDirectories(inbox);
         Files.createDirectories(works);
         Files.createDirectories(coverage);

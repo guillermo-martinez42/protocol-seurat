@@ -2,17 +2,18 @@
 /Seurat protocol-3.md
 /prompt.txt
 
-# runtime data (created by ingest/server, never committed)
+# unified runtime data and build outputs
+.seurat/
+
+# legacy / IDE outputs
 inbox/
 obras/
 cobertura/
 client/dist/
-/tmp/opencode/
-
-# build outputs
-*.class
 target/
 out/
+/tmp/opencode/
+*.class
 *.log
 pnpm-debug.log*
 
