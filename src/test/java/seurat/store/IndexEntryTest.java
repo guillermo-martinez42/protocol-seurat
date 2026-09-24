@@ -12,8 +12,9 @@ public final class IndexEntryTest {
     }
 
     private static void sizes() {
-        TestKit.check(IndexEntry.BYTES == 40, "40B");
-        TestKit.check(IndexEntry.missing().encode().length == 40, "missing encodes");
+        IndexEntry entry = new IndexEntry(0, new long[4], new long[4]);
+        TestKit.check(entry.encode().length == IndexEntry.BYTES, "40B");
+        TestKit.check(IndexEntry.missing().encode().length == IndexEntry.BYTES, "missing encodes");
     }
 
     private static void absentEmpty() {
