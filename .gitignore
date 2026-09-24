@@ -21,9 +21,14 @@ node_modules/
 client/node_modules/
 .pnpm-store/
 
-# OS / editors (.opencode/ stays tracked)
+# OS / editors
 .DS_Store
 Thumbs.db
 .idea/
 .vscode/
 *.iml
+
+# Agent configuration, rules, and skills
+.agents/
+.opencode/
+AGENTS.md

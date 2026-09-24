@@ -18,9 +18,5 @@ for t in $(cd src/test/java && find . -name '*Test.java' | sed 's|^\./||; s|\.ja
   fi
 done
 echo "---"
-if [ -f .agents/skills/java-guardrails/scripts/check-loc.sh ]; then
-  bash .agents/skills/java-guardrails/scripts/check-loc.sh
-elif [ -f .opencode/skills/java-guardrails/scripts/check-loc.sh ]; then
-  bash .opencode/skills/java-guardrails/scripts/check-loc.sh
-fi
+bash "$(dirname "$0")/check-loc.sh"
 [ "$fail" -eq 0 ]
