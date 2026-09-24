@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import seurat.config.SeuratConstants;
+import seurat.observe.Log;
 import seurat.proto.FatalProtocol;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
@@ -35,14 +36,17 @@ final class SessionHandshake {
         }
         Frame f = Frame.decode(ByteBuffer.wrap(raw));
         if (f.type() != FrameType.SALUDO) {
+            Log.warn("session", "Handshake failed: expected SALUDO (0x01), got " + FrameType.name(f.type()));
             throw new FatalProtocol(ProtoCodes.ERR_PROTOCOLO, f.type(), "missing SALUDO");
         }
         MsgHandshake.Hello hello = MsgHandshake.Hello.parse(f.payload());
         if (hello.maxVersion() < 1 || hello.minVersion() > 1) {
+            Log.warn("session", "Handshake failed: version unsupported (" + hello.minVersion() + ".." + hello.maxVersion() + ")");
             throw new FatalProtocol(ProtoCodes.ERR_VERSION, f.type(), "VERSION");
         }
         Sessions.Token token = sessions.consumeToken(Hex.hex(hello.token()));
         if (token == null) {
+            Log.warn("session", "Handshake failed: token invalid or expired");
             throw new FatalProtocol(ProtoCodes.ERR_AUTENTICACION, f.type(), "token");
         }
         long caps = hello.caps() & ProtoCodes.CAP_REANUDAR;
@@ -53,6 +57,9 @@ final class SessionHandshake {
         if (hello.resume() != null) {
             resumed = resume(session, hello.resume());
         }
+        Log.info("session", "Session " + session.id() + " established for " + token.principal()
+                + " [role=" + token.role() + ", mem=" + token.memMib() + "MiB, caps=0x"
+                + Long.toHexString(caps) + "]");
         var welcome = new MsgHandshake.Welcome(1, caps, session.id(),
                 SeuratConstants.BRUSH_SIDE, SeuratConstants.LEASE_S,
                 SeuratConstants.HEARTBEAT_S, SeuratConstants.MAX_IN_FLIGHT, sessionMax,
@@ -85,6 +92,7 @@ final class SessionHandshake {
             }
         }
         if (!ok) {
+            Log.warn("session", "Session " + session.id() + " resume validation failed");
             Easel.send(ref, FrameType.ERROR, new MsgHandshake.ProtocolError(
                     ProtoCodes.ERR_REANUDACION, 0, FrameType.SALUDO, "REANUDAR").encode());
             return List.of();
@@ -95,6 +103,7 @@ final class SessionHandshake {
             session.canvases().put(entry.getKey(), entry.getValue());
             resumed.add(entry.getKey());
         }
+        Log.info("session", "Session " + session.id() + " resumed " + resumed.size() + " canvas(es)");
         session.ticket(sessions.newTicket());
         return resumed;
     }

@@ -2,7 +2,9 @@ package seurat.concession;
 
 import java.util.function.Predicate;
 import seurat.config.SeuratConstants;
+import seurat.proto.MsgGaze;
 import seurat.proto.ProtoCodes;
+import seurat.session.Canvas;
 import seurat.session.Concession;
 import seurat.session.Delivery;
 
@@ -16,6 +18,12 @@ public final class Concessions {
         return new Concession(1, sketchMin, 4,
                 ProtoCodes.MOT_INICIAL, maxBrushes, maxBrushes * 48,
                 SeuratConstants.LEASE_S);
+    }
+
+    public static MsgGaze.ConcessionMessage message(Canvas canvas) {
+        Concession c = canvas.concession();
+        return new MsgGaze.ConcessionMessage(canvas.handle(), c.epoch(), c.minStratum(),
+                c.maxBands(), c.reason(), c.maxBrushes(), c.maxKiB(), c.leaseS());
     }
 
     public static Predicate<Delivery> lowStratum(int stratum) {

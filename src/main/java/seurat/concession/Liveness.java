@@ -1,6 +1,7 @@
 package seurat.concession;
 
 import seurat.config.SeuratConstants;
+import seurat.observe.Log;
 import seurat.proto.FatalProtocol;
 import seurat.proto.FrameType;
 import seurat.proto.MsgAudit;
@@ -28,6 +29,8 @@ public final class Liveness {
         for (Session session : sessions.all()) {
             if (session.lastActivityNs > 0
                     && now - session.lastActivityNs > 3 * SeuratConstants.HEARTBEAT_S * 1_000_000_000L) {
+                Log.warn("liveness", "Session " + session.id() + " heartbeat timeout (inactive "
+                        + ((now - session.lastActivityNs) / 1_000_000_000L) + "s), closing");
                 close(session, ProtoCodes.ERR_PROTOCOLO, FrameType.LATIDO);
                 continue;
             }
@@ -35,9 +38,12 @@ public final class Liveness {
                 try {
                     tickCanvas(session, canvas, now);
                 } catch (FatalProtocol fail) {
+                    Log.warn("liveness", "Session " + session.id() + " canvas " + canvas.handle()
+                            + " fatal liveness failure: " + fail.getMessage());
                     close(session, fail.code, fail.refType);
                     break;
                 } catch (RuntimeException ex) {
+                    Log.error("liveness", "Session " + session.id() + " unexpected liveness error", ex);
                     close(session, ProtoCodes.ERR_INTERNO, 0);
                     break;
                 }
@@ -49,6 +55,8 @@ public final class Liveness {
         synchronized (canvas) {
             for (Canvas.ScrapeOrder order : canvas.pendingOrders()) {
                 if (order.deadlineNs() < now) {
+                    Log.warn("liveness", "Session " + session.id() + " scrape order "
+                            + order.order() + " expired without confirmation");
                     throw new FatalProtocol(ProtoCodes.ERR_LIQUIDACION,
                             FrameType.RASPADO, "LIQUIDACION_VENCIDA");
                 }
@@ -57,6 +65,8 @@ public final class Liveness {
             if (session.lastGazeNs > 0
                     && now - session.lastGazeNs > SeuratConstants.IDLE_S * 1_000_000_000L
                     && canvas.concession().minStratum() < SeuratConstants.SKETCH_MIN) {
+                Log.info("liveness", "Session " + session.id() + " canvas " + canvas.handle()
+                        + " idle timeout, narrowing concession to sketch");
                 Concession current = canvas.concession();
                 grants.narrow(canvas, new Concession(current.epoch() + 1,
                         SeuratConstants.SKETCH_MIN, 4, ProtoCodes.MOT_INACTIVIDAD,
@@ -87,6 +97,8 @@ public final class Liveness {
     }
 
     private void close(Session session, int code, long refType) {
+        Log.info("liveness", "Session " + session.id() + " closed by liveness (code="
+                + ProtoCodes.errorName(code) + ", ref=" + FrameType.name(refType) + ")");
         try {
             GrantController.send(session, FrameType.ERROR,
                     new MsgHandshake.ProtocolError(code, 1, refType, "fatal").encode());

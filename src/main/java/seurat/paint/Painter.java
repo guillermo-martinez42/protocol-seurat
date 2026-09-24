@@ -2,12 +2,14 @@ package seurat.paint;
 
 import java.util.List;
 import java.util.concurrent.PriorityBlockingQueue;
-import seurat.codec.BrushId;
 import java.util.concurrent.Semaphore;
 import seurat.budget.BrushBudget;
+import seurat.codec.BrushId;
 import seurat.config.SeuratConstants;
+import seurat.observe.Log;
 import seurat.observe.Metrics;
 import seurat.plan.PlanEntry;
+import seurat.proto.Ranges;
 import seurat.regulate.Regulator;
 import seurat.session.Canvas;
 import seurat.session.Concession;
@@ -40,6 +42,8 @@ public final class Painter implements Runnable {
         for (PlanEntry entry : entries) {
             queue.add(new Pending(canvas, entry, now, canvas.session().stride));
         }
+        Log.debug("paint", "Enqueued " + entries.size() + " plan entries for canvas "
+                + canvas.handle() + " (session " + canvas.session().id() + ")");
     }
 
     /** Budget finalize before PLAN START (see BudgetApplier). */
@@ -51,11 +55,16 @@ public final class Painter implements Runnable {
      * Revocation purge: drops queued entries the concession forbids and
      * cancels violating in-flight deliveries. Returns the cancelled ranges.
      */
-    public seurat.proto.Ranges purge(Canvas canvas, Concession next) {
+    public Ranges purge(Canvas canvas, Concession next) {
         queue.removeIf(p -> p.canvas() == canvas
                 && (!next.allows(p.entry().brush(), p.entry().through())
                         || p.edition() != canvas.meta().edition()));
-        return inFlight.purge(canvas, next);
+        Ranges cancelled = inFlight.purge(canvas, next);
+        if (!cancelled.isEmpty()) {
+            Log.debug("paint", "Purged entries for canvas " + canvas.handle()
+                    + ", cancelled in-flight=" + cancelled.size());
+        }
+        return cancelled;
     }
 
     @Override
@@ -106,6 +115,8 @@ public final class Painter implements Runnable {
                                 pending.entry().from(), through)),
                         concession.epoch());
             } catch (Exception ex) {
+                Log.warn("paint", "Delivery book log error on canvas " + canvas.handle()
+                        + " brush " + brush.id() + ": " + ex.getMessage());
                 canvas.session().releaseSlot();
                 globalSlots.release();
                 return;

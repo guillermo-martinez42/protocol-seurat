@@ -7,6 +7,7 @@ import java.util.zip.CRC32C;
 import seurat.codec.BrushId;
 import seurat.codec.Quant;
 import seurat.config.SeuratConstants;
+import seurat.observe.Log;
 import seurat.observe.Metrics;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
@@ -58,6 +59,9 @@ final class DeliveryWriter {
             }
             metrics.deliveries.increment();
             metrics.bytes.add(delivery.bytes());
+            Log.debug("paint", "Delivered brush " + delivery.brush().id() + " (#"
+                    + delivery.number() + ") to session " + session.id() + " canvas "
+                    + canvas.handle() + " (" + delivery.bytes() + " B)");
             synchronized (canvas) {
                 if (canvas.book().contains(delivery.number()) && canvas.advancePlan()) {
                     var planEnd = new MsgGaze.Plan(canvas.handle(), canvas.gazeSeq(),
@@ -65,9 +69,13 @@ final class DeliveryWriter {
                             null);
                     session.mapping().sendControl(
                             new Frame(FrameType.PLAN, planEnd.encode()).encode());
+                    Log.debug("paint", "Plan complete on canvas " + canvas.handle()
+                            + " (session " + session.id() + ")");
                 }
             }
         } catch (Exception ex) {
+            Log.warn("paint", "Delivery failed on canvas " + canvas.handle()
+                    + " delivery #" + delivery.number() + ": " + ex.getMessage());
             boolean wasInBook;
             synchronized (canvas) {
                 wasInBook = canvas.book().contains(delivery.number());

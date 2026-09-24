@@ -1,5 +1,6 @@
 package seurat.concession;
 
+import seurat.observe.Log;
 import seurat.proto.FatalProtocol;
 import seurat.proto.FrameType;
 import seurat.proto.MsgAudit;
@@ -20,6 +21,8 @@ final class LoanVerifier {
             var expected = canvas.book().expected(order.through(), order.scrape(),
                     order.cancelled());
             if (!expected.equals(scraped.kept())) {
+                Log.warn("audit", "Scrape possession mismatch on canvas " + canvas.handle()
+                        + ": expected " + expected + ", got " + scraped.kept());
                 throw new FatalProtocol(ProtoCodes.ERR_POSESION,
                         FrameType.RASPADO, "POSESION_DISCREPANTE");
             }
@@ -30,8 +33,10 @@ final class LoanVerifier {
 
     static void audit(Canvas canvas, MsgAudit.Inventory inventory) {
         synchronized (canvas) {
-            if (!canvas.book().numbersThrough(inventory.through())
-                    .equals(inventory.ranges())) {
+            var expected = canvas.book().numbersThrough(inventory.through());
+            if (!expected.equals(inventory.ranges())) {
+                Log.warn("audit", "Inventory audit mismatch on canvas " + canvas.handle()
+                        + ": expected " + expected + ", got " + inventory.ranges());
                 throw new FatalProtocol(ProtoCodes.ERR_POSESION,
                         FrameType.INVENTARIO, "POSESION_DISCREPANTE");
             }

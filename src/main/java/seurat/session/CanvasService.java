@@ -3,10 +3,10 @@ package seurat.session;
 import java.nio.ByteBuffer;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
-import seurat.concession.Concessions;
 import seurat.concession.GrantController;
 import seurat.config.SeuratConstants;
 import seurat.net.Mapping;
+import seurat.observe.Log;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
 import seurat.proto.MsgAudit;
@@ -35,6 +35,7 @@ final class CanvasService {
     Canvas canvas(Session session, long handle) {
         Canvas canvas = session.canvases().get(handle);
         if (canvas == null) {
+            Log.warn("session", "Session " + session.id() + " invalid canvas handle: " + handle);
             Easel.send(mapping, FrameType.ERROR, new MsgHandshake.ProtocolError(
                     ProtoCodes.ERR_HANDLE, 0, handle, "HANDLE").encode());
         }
@@ -46,6 +47,9 @@ final class CanvasService {
         session.lastGazeNs = System.nanoTime();
         Canvas canvas = canvas(session, gaze.handle());
         if (canvas != null) {
+            Log.debug("gaze", "Session " + session.id() + " h=" + gaze.handle() + " gaze: ["
+                    + gaze.x0() + "," + gaze.y0() + ".." + gaze.x1() + "," + gaze.y1()
+                    + "] seq=" + gaze.seq());
             control.gaze(session, canvas, gaze);
         }
     }
@@ -66,6 +70,8 @@ final class CanvasService {
             }
             session.free = Math.max(1, receipt.free());
             session.queueMs = receipt.queueMs();
+            Log.debug("loan", "Session " + session.id() + " h=" + receipt.handle()
+                    + " receipt: ack=" + receipt.completed() + " free=" + session.free);
         }
     }
 
@@ -75,6 +81,8 @@ final class CanvasService {
         if (canvas != null) {
             synchronized (canvas) {
                 canvas.book().release(release.ranges());
+                Log.debug("loan", "Session " + session.id() + " h=" + release.handle()
+                        + " released brushes: " + release.ranges());
             }
         }
     }
@@ -83,6 +91,8 @@ final class CanvasService {
         MsgLoans.Scraped scraped = MsgLoans.Scraped.parse(f.payload());
         Canvas canvas = canvas(session, scraped.handle());
         if (canvas != null) {
+            Log.debug("loan", "Session " + session.id() + " h=" + scraped.handle()
+                    + " scraped confirmed order=" + scraped.order());
             control.confirm(canvas, scraped);
         }
     }
@@ -91,49 +101,25 @@ final class CanvasService {
         MsgAudit.Inventory inventory = MsgAudit.Inventory.parse(f.payload());
         Canvas canvas = canvas(session, inventory.handle());
         if (canvas != null) {
+            Log.debug("audit", "Session " + session.id() + " h=" + inventory.handle()
+                    + " inventory audit: through=" + inventory.through());
             control.audit(canvas, inventory);
         }
     }
 
     void open(Session session, Frame f) {
-        MsgCatalog.OpenWork request = MsgCatalog.OpenWork.parse(f.payload());
-        WorkRecord work = catalog.get(request.id());
-        if (work == null) {
-            Easel.send(mapping, FrameType.ERROR, new MsgHandshake.ProtocolError(
-                    ProtoCodes.ERR_OBRA_INEXISTENTE, 0, FrameType.ABRIR, "work").encode());
-            return;
-        }
-        if (work.meta.state() == ProtoCodes.ST_RECIBIENDO
-                || work.meta.state() == ProtoCodes.ST_FALLIDA) {
-            Easel.send(mapping, FrameType.ERROR, new MsgHandshake.ProtocolError(
-                    ProtoCodes.ERR_OBRA_NO_LISTA, 0, FrameType.ABRIR, "not ready")
-                    .encode());
-            return;
-        }
-        long handle = session.newHandle();
-        long[] ceiling = work.ceiling(session.role());
-        Canvas canvas = new Canvas(handle, request.id(), work.store, work.meta,
-                Concessions.initial(session.memMib(), sessionMax, work.meta.strata() - 1));
-        canvas.session(session);
-        canvas.renewNs = System.nanoTime();
-        canvas.auditNs = System.nanoTime();
-        session.canvases().put(handle, canvas);
-        int top = work.meta.strata() - 1;
-        long paddedW = ((long) work.meta.width() + (1L << top) - 1) >> top << top;
-        long paddedH = ((long) work.meta.height() + (1L << top) - 1) >> top << top;
-        Easel.send(mapping, FrameType.ABIERTA, new MsgCatalog.WorkOpened(handle,
-                work.meta.width(), work.meta.height(), work.meta.strata(),
-                work.meta.edition(), (int) ceiling[0], (int) ceiling[1],
-                paddedW >> top, paddedH >> top).encode());
-        control.open(session, canvas);
+        CanvasOpener.open(mapping, catalog, control, sessionMax, session, f);
     }
 
     void closeCanvas(Session session, Frame f) {
         ByteBuffer b = ByteBuffer.wrap(f.payload());
-        session.canvases().remove(VarInt.get(b));
+        long handle = VarInt.get(b);
+        session.canvases().remove(handle);
+        Log.info("session", "Session " + session.id() + " closed canvas handle=" + handle);
     }
 
     void sendCatalog(Session session) {
+        Log.info("catalog", "Sending catalog listing to session " + session.id());
         for (WorkRecord work : catalog.all()) {
             Easel.send(mapping, FrameType.OBRA, new MsgCatalog.WorkMessage(
                     ProtoCodes.OBRA_LISTADO, work.meta.state(), 100,

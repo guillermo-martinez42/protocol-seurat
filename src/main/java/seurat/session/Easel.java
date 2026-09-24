@@ -4,13 +4,14 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.BlockingQueue;
 import seurat.catalog.Catalog;
 import seurat.concession.GrantController;
+import seurat.config.SeuratConstants;
 import seurat.net.Mapping;
+import seurat.observe.Log;
 import seurat.paint.Painter;
 import seurat.proto.FatalProtocol;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
 import seurat.proto.MsgHandshake;
-import seurat.config.SeuratConstants;
 import seurat.proto.ProtoCodes;
 
 /** One virtual thread per session. Single writer of its session state. */
@@ -49,11 +50,16 @@ public final class Easel implements Runnable {
             service = new CanvasService(mapping, catalog, control, sessionMax);
             loop(session);
         } catch (FatalProtocol fail) {
+            Log.warn("session", "Fatal protocol error [session " + (session == null ? "?" : session.id())
+                    + "]: " + ProtoCodes.errorName(fail.code) + " (ref=" + FrameType.name(fail.refType)
+                    + "): " + fail.getMessage());
             if (session != null) {
                 fail(session, fail.code, fail.refType);
             }
             close(session);
         } catch (Exception ex) {
+            Log.error("session", "Session error [session " + (session == null ? "?" : session.id())
+                    + "]: " + ex.getMessage(), ex);
             if (session != null) {
                 fail(session, ProtoCodes.ERR_INTERNO, 0);
             }
@@ -67,6 +73,7 @@ public final class Easel implements Runnable {
         } catch (Exception ignored) {
         }
         if (session != null) {
+            Log.info("session", "Session " + session.id() + " closed/retired");
             sessions.retire(session, (SeuratConstants.LEASE_S * 1000 + SeuratConstants.SKEW_MS) * 1_000_000L);
         }
     }
@@ -92,6 +99,7 @@ public final class Easel implements Runnable {
             Frame f = Frame.decode(ByteBuffer.wrap(take()));
             session.lastActivityNs = System.nanoTime();
             long type = f.type();
+            Log.debug("proto", "Session " + session.id() + " received " + FrameType.name(type));
             if (type == FrameType.MIRADA) {
                 service.gaze(session, f);
             } else if (type == FrameType.RECIBO) {
@@ -109,6 +117,7 @@ public final class Easel implements Runnable {
             } else if (type == FrameType.CATALOGO) {
                 service.sendCatalog(session);
             } else if (type == FrameType.ADIOS) {
+                Log.info("session", "Session " + session.id() + " sent ADIOS, closing cleanly");
                 return;
             } else if (type != FrameType.ECO && Frame.mandatory(type)) {
                 throw new FatalProtocol(ProtoCodes.ERR_PROTOCOLO, type,
@@ -116,5 +125,4 @@ public final class Easel implements Runnable {
             }
         }
     }
-
 }
