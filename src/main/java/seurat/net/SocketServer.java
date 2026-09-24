@@ -1,6 +1,5 @@
 package seurat.net;
 
-import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
@@ -13,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import seurat.net.http.HttpSurface;
+import seurat.observe.Log;
 
 /**
  * One TCP port: plain HTTP routes plus the seurat.1 WebSocket mapping.
@@ -35,12 +35,15 @@ public final class SocketServer {
 
     public void start() throws Exception {
         try (ServerSocket server = new ServerSocket(port)) {
+            Log.info("net", "SocketServer listening on TCP port " + port);
             for (;;) {
                 Socket socket = server.accept();
                 Thread.ofVirtual().start(() -> {
+                    String remote = String.valueOf(socket.getRemoteSocketAddress());
                     try {
-                        handle(socket);
-                    } catch (Exception ignored) {
+                        handle(socket, remote);
+                    } catch (Exception ex) {
+                        Log.debug("net", "Connection closed/error from " + remote + ": " + ex.getMessage());
                         try {
                             socket.close();
                         } catch (Exception alsoIgnored) {
@@ -51,10 +54,10 @@ public final class SocketServer {
         }
     }
 
-    private void handle(Socket socket) throws Exception {
+    private void handle(Socket socket, String remote) throws Exception {
         InputStream in = socket.getInputStream();
         OutputStream out = socket.getOutputStream();
-        String head = readLine(in);
+        String head = SocketIo.readLine(in);
         if (head == null) {
             socket.close();
             return;
@@ -62,7 +65,7 @@ public final class SocketServer {
         String[] parts = head.split(" ", 3);
         Map<String, String> headers = new HashMap<>();
         String line;
-        while ((line = readLine(in)) != null && !line.isEmpty()) {
+        while ((line = SocketIo.readLine(in)) != null && !line.isEmpty()) {
             int colon = line.indexOf(':');
             if (colon > 0) {
                 headers.put(line.substring(0, colon).trim().toLowerCase(),
@@ -70,7 +73,9 @@ public final class SocketServer {
             }
         }
         if (isWebSocket(parts, headers)) {
+            Log.info("ws", "Upgrading WebSocket connection for " + remote + " [" + parts[1] + "]");
             upgrade(socket, headers.get("sec-websocket-key"));
+            Log.info("ws", "WebSocket connection upgraded (seurat.1) for " + remote);
             return;
         }
         int length = 0;
@@ -81,15 +86,13 @@ public final class SocketServer {
         }
         byte[] body = in.readNBytes(length);
         String host = headers.getOrDefault("host", "localhost:" + port);
+        long t0 = System.nanoTime();
         var response = http.route(new HttpSurface.Request(parts[0], parts[1], headers,
                 body, host));
-        String status = response.code() == 200 ? "200 OK"
-                : response.code() == 201 ? "201 Created"
-                : response.code() == 202 ? "202 Accepted"
-                : response.code() == 403 ? "403 Forbidden" : "404 Not Found";
-        if (response.code() == 500) {
-            status = "500 Internal Error";
-        }
+        long elapsedMs = (System.nanoTime() - t0) / 1_000_000L;
+        Log.info("http", parts[0] + " " + parts[1] + " -> " + response.code()
+                + " (" + elapsedMs + "ms, " + response.body().length + " B) [" + remote + "]");
+        String status = statusLine(response.code());
         String header = "HTTP/1.1 " + status + "\r\nContent-Type: " + response.type()
                 + "\r\nContent-Length: " + response.body().length
                 + "\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
@@ -97,6 +100,17 @@ public final class SocketServer {
         out.write(response.body());
         out.flush();
         socket.close();
+    }
+
+    private static String statusLine(int code) {
+        return switch (code) {
+            case 200 -> "200 OK";
+            case 201 -> "201 Created";
+            case 202 -> "202 Accepted";
+            case 403 -> "403 Forbidden";
+            case 500 -> "500 Internal Error";
+            default -> "404 Not Found";
+        };
     }
 
     private static boolean isWebSocket(String[] parts, Map<String, String> headers) {
@@ -117,27 +131,5 @@ public final class SocketServer {
         socket.getOutputStream().flush();
         BlockingQueue<byte[]> control = new LinkedBlockingQueue<>();
         acceptor.accept(new WsMapping(socket, control), control);
-    }
-
-    static String readLine(InputStream in) throws Exception {
-        ByteArrayOutputStream line = new ByteArrayOutputStream();
-        int prev = -1;
-        for (;;) {
-            int b = in.read();
-            if (b < 0) {
-                return line.size() == 0 && prev != 1 ? null : line.toString(StandardCharsets.UTF_8);
-            }
-            if (b == '\n') {
-                break;
-            }
-            if (prev == '\r') {
-                line.write('\r');
-            }
-            if (b != '\r') {
-                line.write(b);
-            }
-            prev = b;
-        }
-        return line.toString(StandardCharsets.UTF_8);
     }
 }

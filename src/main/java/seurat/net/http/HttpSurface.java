@@ -9,6 +9,7 @@ import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
 import seurat.config.SeuratConfig;
 import seurat.config.SeuratConstants;
+import seurat.observe.Log;
 import seurat.session.Sessions;
 
 /**
@@ -34,7 +35,7 @@ public final class HttpSurface {
 
     public Response route(Request req) {
         try {
-            if (req.method().equals("GET")) {
+            if (req.method().equals("GET") || req.method().equals("HEAD")) {
                 return staticGet(req.path());
             }
             if (req.method().equals("POST") && req.path().equals("/seurat/v1/sesion")) {
@@ -45,6 +46,7 @@ public final class HttpSurface {
             }
             return json(404, "{\"error\":\"no existe\"}");
         } catch (Exception ex) {
+            Log.error("http", "Error routing request " + req.method() + " " + req.path(), ex);
             return json(500, "{\"error\":\"interno\"}");
         }
     }
@@ -70,6 +72,8 @@ public final class HttpSurface {
                 : "anonimo";
         String token = sessions.issueToken(principal, role, memMib,
                 SeuratConstants.TOKEN_TTL_S * 1000);
+        Log.info("session", "Issued session token for principal=" + principal
+                + " (role=" + role + ", mem=" + memMib + "MiB)");
         String base = "ws://" + req.host();
         String json = "{\"token\":\"" + token + "\",\"lienzo\":\"" + base
                 + "/seurat/v1/lienzo-ws\",\"respaldo\":\"" + base

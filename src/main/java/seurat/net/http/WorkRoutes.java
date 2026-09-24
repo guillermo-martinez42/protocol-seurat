@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
 import seurat.config.SeuratConfig;
+import seurat.observe.Log;
 
 /** PUT/DELETE /seurat/v1/obras/{id} + PUT .../politica. Admin only. */
 final class WorkRoutes {
@@ -32,20 +33,24 @@ final class WorkRoutes {
         String id = slash < 0 ? rest : rest.substring(0, slash);
         String tail = slash < 0 ? "" : rest.substring(slash);
         if (!req.headers().getOrDefault("x-admin-token", "").equals(config.adminToken)) {
+            Log.warn("admin", "Unauthorized admin attempt on " + req.method() + " " + req.path());
             return HttpSurface.json(403, "{\"error\":\"admin\"}");
         }
         if (req.method().equals("PUT") && tail.isEmpty()) {
             Path file = config.inbox.resolve(id);
             Files.write(file, req.body());
+            Log.info("admin", "Admin uploaded master for work '" + id + "' (" + req.body().length + " B)");
             onMaster.accept(id, file);
             return HttpSurface.json(202, "{\"estado\":\"recibiendo\"}");
         }
         if (req.method().equals("PUT") && tail.equals("/politica")) {
             applyPolicy(id, new String(req.body(), StandardCharsets.UTF_8));
+            Log.info("admin", "Admin updated policy for work '" + id + "'");
             onPolicy.accept(id);
             return HttpSurface.json(200, "{\"ok\":true}");
         }
         if (req.method().equals("DELETE") && tail.isEmpty()) {
+            Log.info("admin", "Admin withdrew work '" + id + "'");
             onWithdraw.accept(id);
             return HttpSurface.json(200, "{\"ok\":true}");
         }

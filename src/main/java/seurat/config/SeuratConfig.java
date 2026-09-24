@@ -16,9 +16,11 @@ public final class SeuratConfig {
     public final String evictionPolicy;
     public final int sessionMaxBrushes;
     public final long rateBytesPerSec;
+    public final String logLevel;
 
     private SeuratConfig(int httpPort, Path inbox, Path works, Path coverage,
-            String adminToken, String evictionPolicy, int sessionMax, long rate) {
+            String adminToken, String evictionPolicy, int sessionMax, long rate,
+            String logLevel) {
         this.httpPort = httpPort;
         this.inbox = inbox;
         this.works = works;
@@ -27,6 +29,7 @@ public final class SeuratConfig {
         this.evictionPolicy = evictionPolicy;
         this.sessionMaxBrushes = sessionMax;
         this.rateBytesPerSec = rate;
+        this.logLevel = logLevel;
     }
 
     public static SeuratConfig load(Path conf) throws IOException {
@@ -61,7 +64,8 @@ public final class SeuratConfig {
                 strOf(props, "admin.token", "cambia-esto"),
                 strOf(props, "eviction.policy", "lru"),
                 intOf(props, "session.max_brushes", 1024),
-                Long.parseLong(strOf(props, "rate.bytes_per_s", "25000000")));
+                Long.parseLong(strOf(props, "rate.bytes_per_s", "25000000")),
+                strOf(props, "log.level", "INFO"));
     }
 
     private static String strOf(Map<String, String> props, String k, String dflt) {
