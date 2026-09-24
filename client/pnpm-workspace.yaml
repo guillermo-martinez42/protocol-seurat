@@ -1,0 +1,4 @@
+allowBuilds:
+  esbuild: true
+patchedDependencies:
+  rolldown@1.2.9: patches/rolldown@1.2.9.patch

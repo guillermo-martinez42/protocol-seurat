@@ -1,0 +1,17 @@
+diff --git a/dist/shared/create-bundler-option-DJpvtSqr.mjs b/dist/shared/create-bundler-option-DJpvtSqr.mjs
+index 0690168e7f307cddc2f576af52ef5736a016fe0d..d5d3fcd06dc9effef7485020e46f8df2082ca08a 100644
+--- a/dist/shared/create-bundler-option-DJpvtSqr.mjs
++++ b/dist/shared/create-bundler-option-DJpvtSqr.mjs
+@@ -5,10 +5,11 @@ import { C as LOG_LEVEL_WARN, T as VERSION, _ as getParallelPluginInfo, a as mea
+ import { a as unimplemented } from "./misc-DOSKtd97.mjs";
+ import { Worker } from "node:worker_threads";
+ import path, { sep } from "node:path";
+-import { formatWithOptions, styleText } from "node:util";
++import nodeUtil, { formatWithOptions } from "node:util";
+ import g$1 from "node:process";
+ import * as tty from "node:tty";
+ import os from "node:os";
++const styleText = nodeUtil.styleText ?? ((format, text) => text);
+ //#region src/log/logger.ts
+ function getLogger(plugins, onLog, logLevel, watchMode) {
+ 	const minimalPriority = logLevelPriority[logLevel];
