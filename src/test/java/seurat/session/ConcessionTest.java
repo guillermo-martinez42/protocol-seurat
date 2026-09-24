@@ -14,6 +14,10 @@ public final class ConcessionTest {
         Concession sketch = new Concession(1, 7, 4, 0, 768, 36864, 120);
         TestKit.check(!sketch.allows(new BrushId(6, 0, 0), 4), "sketch only");
         TestKit.check(sketch.allows(new BrushId(9, 0, 0), 4), "sketch allowed");
+        TestKit.check(seurat.concession.Concessions.sketchMin(0) == 0, "sketchMin top 0");
+        TestKit.check(seurat.concession.Concessions.sketchMin(1) == 0, "sketchMin top 1");
+        TestKit.check(seurat.concession.Concessions.sketchMin(4) == 3, "sketchMin top 4");
+        TestKit.check(seurat.concession.Concessions.sketchMin(10) == 7, "sketchMin top 10");
         System.out.println("ConcessionTest OK");
     }
 }

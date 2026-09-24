@@ -12,9 +12,13 @@ import seurat.session.Delivery;
 public final class Concessions {
     private Concessions() {}
 
+    public static int sketchMin(int top) {
+        return Math.min(SeuratConstants.SKETCH_MIN, Math.max(0, top - 1));
+    }
+
     public static Concession initial(long memMib, int sessionMax, int top) {
         int maxBrushes = (int) Math.min(memMib * 3, sessionMax);
-        int sketchMin = Math.min(SeuratConstants.SKETCH_MIN, Math.max(0, top - 1));
+        int sketchMin = sketchMin(top);
         return new Concession(1, sketchMin, 4,
                 ProtoCodes.MOT_INICIAL, maxBrushes, maxBrushes * 48,
                 SeuratConstants.LEASE_S);

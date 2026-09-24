@@ -66,18 +66,19 @@ public final class Liveness {
                 }
             }
             canvas.book().pruneExpired(now);
+            int sMin = Concessions.sketchMin(canvas.meta().strata() - 1);
             if (session.lastGazeNs > 0
                     && now - session.lastGazeNs > SeuratConstants.IDLE_S * 1_000_000_000L
-                    && canvas.concession().minStratum() < SeuratConstants.SKETCH_MIN) {
+                    && canvas.concession().minStratum() < sMin) {
                 Log.info("liveness", "Session " + session.id() + " canvas " + canvas.handle()
                         + " idle timeout, narrowing concession to sketch");
                 Concession current = canvas.concession();
                 grants.narrow(canvas, new Concession(current.epoch() + 1,
-                        SeuratConstants.SKETCH_MIN, 4, ProtoCodes.MOT_INACTIVIDAD,
+                        sMin, 4, ProtoCodes.MOT_INACTIVIDAD,
                         current.maxBrushes(), current.maxKiB(), current.leaseS()),
-                        Concessions.lowStratum(SeuratConstants.SKETCH_MIN),
+                        Concessions.lowStratum(sMin),
                         MsgLoans.Scrape.lowStratum(canvas.handle(), 0,
-                                current.epoch() + 1, 0, SeuratConstants.SKETCH_MIN));
+                                current.epoch() + 1, 0, sMin));
             }
             if (now - canvas.renewNs > SeuratConstants.RENEW_S * 1_000_000_000L) {
                 canvas.renewNs = now;

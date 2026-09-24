@@ -1,68 +1,139 @@
 package seurat.ingest;
 
 import java.awt.image.BufferedImage;
+import java.io.BufferedInputStream;
+import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.util.zip.InflaterInputStream;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 
-/** PNG/JPEG/TIFF via ImageIO, region reads so big masters stay bounded. */
+/**
+ * Sequential streaming PNG reader (O(1) memory, zero rewind) with ImageIO fallback
+ * for non-standard/interlaced PNG or other formats.
+ */
 public final class PngReader implements MasterReader {
-    private final ImageReader reader;
-    private final ImageInputStream entry;
     private final int width;
     private final int height;
+    private final int bpp;
+    private final int colorType;
+    private final boolean streaming;
+    private final DataInputStream scanlines;
+    private final InputStream rawStream;
+    private final ImageReader fallbackReader;
+    private final ImageInputStream fallbackInput;
+    private byte[] curRow;
+    private byte[] prevRow;
     private int row;
 
     public PngReader(Path ruta) throws IOException {
-        entry = ImageIO.createImageInputStream(ruta.toFile());
-        Iterator<ImageReader> it = ImageIO.getImageReaders(entry);
-        if (!it.hasNext()) {
-            throw new IOException("unsupported format: " + ruta);
+        StreamHeader hdr = tryStream(ruta);
+        if (hdr != null) {
+            this.streaming = true;
+            this.width = hdr.w;
+            this.height = hdr.h;
+            this.bpp = hdr.bp;
+            this.colorType = hdr.ct;
+            this.rawStream = hdr.is;
+            this.scanlines = hdr.sl;
+            this.curRow = new byte[hdr.w * hdr.bp];
+            this.prevRow = new byte[hdr.w * hdr.bp];
+            this.fallbackReader = null;
+            this.fallbackInput = null;
+        } else {
+            this.streaming = false;
+            this.rawStream = null;
+            this.scanlines = null;
+            this.bpp = 0;
+            this.colorType = 0;
+            this.fallbackInput = ImageIO.createImageInputStream(ruta.toFile());
+            Iterator<ImageReader> it = ImageIO.getImageReaders(fallbackInput);
+            if (!it.hasNext()) throw new IOException("unsupported format: " + ruta);
+            this.fallbackReader = it.next();
+            this.fallbackReader.setInput(fallbackInput);
+            this.width = fallbackReader.getWidth(0);
+            this.height = fallbackReader.getHeight(0);
         }
-        reader = it.next();
-        reader.setInput(entry);
-        width = reader.getWidth(0);
-        height = reader.getHeight(0);
+    }
+
+    private record StreamHeader(int w, int h, int bp, int ct, InputStream is, DataInputStream sl) {}
+
+    private static StreamHeader tryStream(Path ruta) {
+        try {
+            InputStream is = new BufferedInputStream(Files.newInputStream(ruta), 65536);
+            DataInputStream dis = new DataInputStream(is);
+            byte[] sig = new byte[8];
+            dis.readFully(sig);
+            if (!isPng(sig) || dis.readInt() < 13 || dis.readInt() != 0x49484452) {
+                is.close();
+                return null;
+            }
+            int w = dis.readInt();
+            int h = dis.readInt();
+            int depth = dis.readByte();
+            int ct = dis.readByte();
+            dis.readByte(); dis.readByte();
+            int interlace = dis.readByte();
+            dis.readInt();
+            if (depth != 8 || (ct != 0 && ct != 2 && ct != 6) || interlace != 0) {
+                is.close();
+                return null;
+            }
+            int bp = ct == 6 ? 4 : (ct == 2 ? 3 : 1);
+            DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis)));
+            return new StreamHeader(w, h, bp, ct, is, sl);
+        } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    private static boolean isPng(byte[] s) {
+        return (s[0] & 0xFF) == 0x89 && s[1] == 0x50 && s[2] == 0x4E && s[3] == 0x47
+                && s[4] == 0x0D && s[5] == 0x0A && s[6] == 0x1A && s[7] == 0x0A;
     }
 
     @Override
-    public int width() {
-        return width;
-    }
+    public int width() { return width; }
 
     @Override
-    public int height() {
-        return height;
-    }
+    public int height() { return height; }
 
     @Override
     public int[][] next() throws IOException {
-        if (row >= height) {
-            return null;
-        }
+        if (row >= height) return null;
         int n = Math.min(256, height - row);
-        var param = reader.getDefaultReadParam();
-        param.setSourceRegion(new java.awt.Rectangle(0, row, width, n));
-        BufferedImage img = reader.read(0, param);
         int[][] band = new int[n][width];
-        for (int y = 0; y < n; y++) {
-            img.getRGB(0, y, width, 1, band[y], 0, width);
+        if (streaming) {
+            int rowBytes = width * bpp;
+            for (int y = 0; y < n; y++) {
+                int filter = scanlines.readUnsignedByte();
+                scanlines.readFully(curRow);
+                PngUnfilter.unfilter(filter, curRow, prevRow, bpp, rowBytes);
+                PngUnfilter.decodeRgb(curRow, band[y], colorType, width);
+                byte[] tmp = prevRow; prevRow = curRow; curRow = tmp;
+            }
+        } else {
+            var param = fallbackReader.getDefaultReadParam();
+            param.setSourceRegion(new java.awt.Rectangle(0, row, width, n));
+            BufferedImage img = fallbackReader.read(0, param);
+            for (int y = 0; y < n; y++) img.getRGB(0, y, width, 1, band[y], 0, width);
         }
         row += n;
         return band;
     }
 
     @Override
-    public double fraction() {
-        return (double) row / Math.max(1, height);
-    }
+    public double fraction() { return (double) row / Math.max(1, height); }
 
     @Override
     public void close() throws IOException {
-        reader.dispose();
-        entry.close();
+        if (rawStream != null) rawStream.close();
+        if (fallbackReader != null) fallbackReader.dispose();
+        if (fallbackInput != null) fallbackInput.close();
     }
 }

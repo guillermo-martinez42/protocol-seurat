@@ -93,12 +93,12 @@ public final class GrantController {
 
     private void hide(Canvas canvas) {
         Concession current = canvas.concession();
-        if (current.minStratum() < SeuratConstants.SKETCH_MIN) {
-            narrow(canvas, new Concession(current.epoch() + 1, SeuratConstants.SKETCH_MIN, 4,
+        int sMin = Concessions.sketchMin(canvas.meta().strata() - 1);
+        if (current.minStratum() < sMin) {
+            narrow(canvas, new Concession(current.epoch() + 1, sMin, 4,
                     ProtoCodes.MOT_OCULTA, current.maxBrushes(), current.maxKiB(), current.leaseS()),
-                    Concessions.lowStratum(SeuratConstants.SKETCH_MIN),
-                    MsgLoans.Scrape.lowStratum(canvas.handle(), 0, current.epoch() + 1, 0,
-                            SeuratConstants.SKETCH_MIN));
+                    Concessions.lowStratum(sMin),
+                    MsgLoans.Scrape.lowStratum(canvas.handle(), 0, current.epoch() + 1, 0, sMin));
         }
     }
 
