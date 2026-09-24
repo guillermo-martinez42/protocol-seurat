@@ -11,10 +11,10 @@ public final class PredictSP {
     }
 
     public static int hHat(int[] parents, int w, int h, int x, int y) {
-        return (at(parents, w, h, x, y - 1) - at(parents, w, h, x, y + 1) + 2) >> 2;
+        return (at(parents, w, h, x - 1, y) - at(parents, w, h, x + 1, y) + 2) >> 2;
     }
 
     public static int vHat(int[] parents, int w, int h, int x, int y) {
-        return (at(parents, w, h, x - 1, y) - at(parents, w, h, x + 1, y) + 2) >> 2;
+        return (at(parents, w, h, x, y - 1) - at(parents, w, h, x, y + 1) + 2) >> 2;
     }
 }

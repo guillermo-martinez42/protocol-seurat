@@ -43,8 +43,10 @@ public final class QuantPredictTest {
         }
         int hh = PredictSP.hHat(parents, w, h, 3, 3);
         int vv = PredictSP.vHat(parents, w, h, 3, 3);
-        int expectedH = 44; // (191-15+2)>>2
+        int expectedH = 46; // (194-12+2)>>2
+        int expectedV = 44; // (191-15+2)>>2
         TestKit.check(hh == expectedH, "hHat formula, got " + hh);
+        TestKit.check(vv == expectedV, "vHat formula, got " + vv);
         TestKit.check(PredictSP.hHat(parents, w, h, 0, 0)
                 == PredictSP.hHat(parents, w, h, 0, 0), "edge deterministic");
         TestKit.check(Math.abs(vv) < 256, "vHat bounded");
