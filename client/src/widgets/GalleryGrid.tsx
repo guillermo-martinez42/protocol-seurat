@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { hash3 } from '@/shared/lib/hash3';
+import { useWorkPreview } from '@/entities/work';
+import { drawScaledRgba } from '@/shared/codec/seed';
 import type { Work } from '@/entities/work/types';
 import { workDims, orientOf, workTitle } from '@/entities/work/types';
 import type { Filter } from '@/entities/work/store';
@@ -7,6 +9,8 @@ import { Icon } from '@/shared/ui/Icon';
 
 function Thumb({ work }: { work: Work }): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
+  const preview = useWorkPreview(work.id);
+
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
@@ -17,6 +21,12 @@ function Thumb({ work }: { work: Work }): JSX.Element {
     c.height = h;
     const ctx = c.getContext('2d');
     if (!ctx) return;
+
+    if (preview) {
+      drawScaledRgba(ctx, preview.rgba, preview.width, preview.height, w, h);
+      return;
+    }
+
     const img = ctx.createImageData(w, h);
     let seed = 0;
     for (const ch of work.id) seed = (seed * 31 + ch.charCodeAt(0)) | 0;
@@ -31,7 +41,8 @@ function Thumb({ work }: { work: Work }): JSX.Element {
       }
     }
     ctx.putImageData(img, 0, 0);
-  }, [work]);
+  }, [work, preview]);
+
   return <canvas ref={ref} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />;
 }
 

@@ -5,6 +5,7 @@ import { applyWork, fixtureWorks } from '@/entities/work/store';
 import type { Work } from '@/entities/work/types';
 import type { Abierta, Bienvenida, Concession, PlanMsg, ProtoError } from '@/shared/proto/messages';
 import { GazeSender } from '@/features/send-gaze';
+import { PreviewManager } from '@/features/preview-works';
 
 export interface SeuratState {
   status: string;
@@ -42,19 +43,27 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
   const sinkRef = useRef<DeliverySink | null>(null);
   const miradasRef = useRef<GazeSender | null>(null);
   const worksRef = useRef(new Map<string, Work>());
+  const previewRef = useRef<PreviewManager | null>(null);
 
   useEffect(() => {
     let alive = true;
+    const preview = new PreviewManager(() => clientRef.current);
+    previewRef.current = preview;
     const events: SessionEvents = {
       onBienvenida: (b) => {
         if (alive) setBienvenida(b);
       },
       onObra: (m) => {
         worksRef.current = applyWork(worksRef.current, m);
-        if (alive) setWorks([...worksRef.current.values()]);
+        const list = [...worksRef.current.values()];
+        if (alive) {
+          setWorks(list);
+          previewRef.current?.enqueue(list.map((w) => w.id));
+        }
       },
       onAbierta: (a) => {
         if (!alive) return;
+        previewRef.current?.pause();
         setAbierta(a);
         const sink = new DeliverySink(
           a.handle,
@@ -65,6 +74,12 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
           a.semillaAlto,
         );
         sinkRef.current = sink;
+      },
+      onPreviewAbierta: (id, a) => {
+        previewRef.current?.onAbierta(id, a);
+      },
+      onPreviewError: (id) => {
+        previewRef.current?.onError(id);
       },
       onConcesion: (c) => {
         concessionRef.current = c;
@@ -93,10 +108,12 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
           sinkRef.current = null;
           setAbierta(null);
           setConcesion(null);
+          previewRef.current?.resume();
         }
         if (alive) setLastError(e);
       },
       onDelivery: (bytes) => {
+        if (previewRef.current?.onDelivery(bytes)) return;
         sinkRef.current?.ingest(bytes, () => performance.now(), () => {
           if (alive) setPaintTick((t) => t + 1);
         }, concessionRef.current?.leaseS ?? 120);
@@ -137,6 +154,8 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       window.removeEventListener('pagehide', onHide);
       window.clearInterval(sweep);
       miradasRef.current?.dispose();
+      previewRef.current?.dispose();
+      previewRef.current = null;
       sinkRef.current?.dispose();
       client.dispose();
       clientRef.current = null;

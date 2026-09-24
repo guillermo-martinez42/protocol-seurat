@@ -1,0 +1,146 @@
+import { describe, expect, it } from 'vitest';
+import { PreviewManager } from '../model/preview-manager';
+import { clearWorkPreviews, getWorkPreview } from '@/entities/work/previews';
+import { makeBrushId } from '@/shared/proto/brush';
+import { crc32c } from '@/shared/codec/crc32c';
+import { concat, viEncode } from '@/shared/proto/varint';
+import { ulebEncode, zigzagEncode } from '@/shared/codec/leb128';
+import { rgbToYCoCg } from '@/shared/codec/ycocgr';
+import type { SessionClient } from '@/app/providers/session-client';
+
+async function compressDeflateRaw(data: Uint8Array): Promise<Uint8Array> {
+  const cs = new CompressionStream('deflate-raw');
+  const writer = cs.writable.getWriter();
+  const reader = cs.readable.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalLen = 0;
+
+  const readPromise = (async () => {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      totalLen += value.length;
+    }
+    const out = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const c of chunks) {
+      out.set(c, offset);
+      offset += c.length;
+    }
+    return out;
+  })();
+
+  await writer.write(data as unknown as Uint8Array<ArrayBuffer>);
+  await writer.close();
+  return readPromise;
+}
+
+async function makeSeedDelivery(handle: number, w: number, h: number): Promise<Uint8Array> {
+  const Y: number[] = [];
+  const Co: number[] = [];
+  const Cg: number[] = [];
+
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const yco = rgbToYCoCg(120, 140, 200);
+      Y.push(yco.y);
+      Co.push(yco.co);
+      Cg.push(yco.cg);
+    }
+  }
+
+  const raw: number[] = [];
+  for (const pl of [Y, Co, Cg]) {
+    for (let y = 0; y < h; y++) {
+      let left = 0;
+      for (let x = 0; x < w; x++) {
+        const v = pl[y * w + x]!;
+        raw.push(...ulebEncode(zigzagEncode(v - left)));
+        left = v;
+      }
+    }
+  }
+
+  const band = await compressDeflateRaw(new Uint8Array(raw));
+  const c = crc32c(band);
+  const bIdBuf = new Uint8Array(8);
+  const brushId = makeBrushId(10, 0, 0); // stratum 10
+  new DataView(bIdBuf.buffer).setBigUint64(0, brushId);
+  const crcBuf = new Uint8Array(4);
+  new DataView(crcBuf.buffer).setUint32(0, c);
+
+  return concat(
+    viEncode(0x01), // PINCELADA
+    viEncode(handle),
+    viEncode(1), // delivery 1
+    bIdBuf,
+    [0x01], // from=0, through=1
+    viEncode(1), // epoch
+    [1, 1], // qY, qC (lossless)
+    viEncode(1), // edition
+    crcBuf,
+    viEncode(band.length),
+    band,
+  );
+}
+
+describe('PreviewManager', () => {
+  it('queues, loads seed delivery, stores preview, closes handle, and advances', async () => {
+    clearWorkPreviews();
+
+    const openedPreviews: string[] = [];
+    const closedHandles: number[] = [];
+
+    const mockClient = {
+      openPreview: (id: string) => {
+        openedPreviews.push(id);
+      },
+      closeHandle: (handle: number) => {
+        closedHandles.push(handle);
+      },
+    } as unknown as SessionClient;
+
+    const manager = new PreviewManager(() => mockClient);
+
+    // 1. Enqueue works
+    manager.enqueue(['work-a', 'work-b']);
+    expect(openedPreviews).toEqual(['work-a']);
+
+    // 2. Server responds with ABIERTA for work-a
+    manager.onAbierta('work-a', {
+      handle: 101,
+      width: 1920,
+      height: 1080,
+      estratos: 11,
+      edition: 1,
+      techoEstrato: 10,
+      techoBandas: 4,
+      semillaAncho: 4,
+      semillaAlto: 4,
+    });
+
+    // 3. Server streams delivery 1 (semilla)
+    const seedBytes = await makeSeedDelivery(101, 4, 4);
+    const consumed = manager.onDelivery(seedBytes);
+    expect(consumed).toBe(true);
+
+    // Wait for async decode and advance
+    await new Promise((r) => setTimeout(r, 50));
+
+    // Verify work-a preview was cached
+    const previewA = getWorkPreview('work-a');
+    expect(previewA).toBeDefined();
+    expect(previewA?.width).toBe(4);
+    expect(previewA?.height).toBe(4);
+    expect(previewA?.rgba.length).toBe(4 * 4 * 4);
+
+    // Verify handle 101 was closed
+    expect(closedHandles).toContain(101);
+
+    // Verify next queued work (work-b) was opened
+    expect(openedPreviews).toEqual(['work-a', 'work-b']);
+
+    manager.dispose();
+  });
+});

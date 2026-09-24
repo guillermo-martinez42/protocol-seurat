@@ -2,11 +2,13 @@ import { useEffect, useRef } from 'react';
 import { hash3 } from '@/shared/lib/hash3';
 import { clamp } from '@/shared/lib/clamp';
 import { Icon } from '@/shared/ui/Icon';
+import { useWorkPreview } from '@/entities/work';
 
 const CELL = 11;
 
-export function GalleryHero({ onOpen }: { onOpen: () => void }): JSX.Element {
+export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; featuredWorkId?: string }): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
+  const preview = useWorkPreview(featuredWorkId ?? '');
 
   useEffect(() => {
     const canvas = ref.current;
@@ -15,7 +17,9 @@ export function GalleryHero({ onOpen }: { onOpen: () => void }): JSX.Element {
     const ro = new ResizeObserver(() => tick());
     ro.observe(canvas);
     const start = performance.now();
-    const sample = makeSample();
+    const sample = preview
+      ? { d: preview.rgba, w: preview.width, h: preview.height }
+      : makeSample();
     function tick(): void {
       cancelAnimationFrame(raf);
       const c = ref.current;
@@ -69,7 +73,7 @@ export function GalleryHero({ onOpen }: { onOpen: () => void }): JSX.Element {
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, []);
+  }, [preview]);
 
   return (
     <section

@@ -30,10 +30,13 @@ export function GalleryPage(): JSX.Element {
         <span style={{ fontSize: 22, fontWeight: 720, fontVariationSettings: "'wdth' 125", letterSpacing: '-0.01em' }}>asynchronous</span>
       </header>
       <main style={{ maxWidth: 1440, margin: '0 auto', padding: '4px 32px 96px', display: 'flex', flexDirection: 'column', gap: 40 }}>
-        <GalleryHero onOpen={() => {
-          const first = items[0];
-          if (first) goViewer(first.id);
-        }} />
+        <GalleryHero
+          featuredWorkId={items[0]?.id}
+          onOpen={() => {
+            const first = items[0];
+            if (first) goViewer(first.id);
+          }}
+        />
         <GalleryGrid
           items={items}
           filter={ui.filter}

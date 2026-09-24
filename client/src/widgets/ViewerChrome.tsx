@@ -62,7 +62,8 @@ interface BrushGeom {
   s: number;
   x: number;
   y: number;
-  size: number;
+  w: number;
+  h: number;
   bmp: ImageBitmap;
 }
 
@@ -156,11 +157,17 @@ export function ViewerChrome(props: Props): JSX.Element {
       const sink = P().sink;
       if (!sink) return [];
       const out: BrushGeom[] = [];
+      const iw = P().iw;
+      const ih = P().ih;
       for (const rec of sink.book.byDelivery.values()) {
         if (!rec.rgba) continue;
         const { s, bx, by } = splitBrushId(rec.brushId);
-        const size = 256 * 2 ** s;
-        out.push({ delivery: rec.delivery, s, x: bx * size, y: by * size, size, bmp: rec.rgba });
+        if (s === 10) {
+          out.push({ delivery: rec.delivery, s, x: 0, y: 0, w: iw, h: ih, bmp: rec.rgba });
+        } else {
+          const size = 256 * 2 ** s;
+          out.push({ delivery: rec.delivery, s, x: bx * size, y: by * size, w: size, h: size, bmp: rec.rgba });
+        }
       }
       out.sort((a, b) => b.s - a.s);
       return out;
@@ -215,21 +222,23 @@ export function ViewerChrome(props: Props): JSX.Element {
       for (const b of list) {
         const dx = tx + b.x * s;
         const dy = ty + b.y * s;
-        const dw = b.size * s;
-        if (dx + dw < cx0 || dx > cx1 || dy + dw < cy0 || dy > cy1) continue;
+        const dw = b.w * s;
+        const dh = b.h * s;
+        if (dx + dw < cx0 || dx > cx1 || dy + dh < cy0 || dy > cy1) continue;
         ctx.globalAlpha = 1 - f * 0.9;
-        ctx.drawImage(b.bmp, dx, dy, dw, dw);
+        ctx.drawImage(b.bmp, dx, dy, dw, dh);
       }
       ctx.globalAlpha = 1;
       if (dotsOn) {
         const grow = 0.4 + 0.6 * f;
         for (const b of list) {
+          if (b.s === 10) continue;
           const g = gridFor(b);
           if (!g) continue;
           for (let gy = 0; gy < g.h; gy++) {
             for (let gx = 0; gx < g.w; gx++) {
               const gi = (gy * g.w + gx) * 4;
-              const step = b.size / g.w;
+              const step = b.w / g.w;
               const ix = b.x + gx * step + step / 2;
               const iy = b.y + gy * step + step / 2;
               let cx = tx + ix * s;
@@ -365,11 +374,11 @@ export function ViewerChrome(props: Props): JSX.Element {
         if (ix >= 0 && iy >= 0 && ix < p.iw && iy < p.ih) {
           let hex: string | null = null;
           for (const b of brushes()) {
-            if (ix >= b.x && ix < b.x + b.size && iy >= b.y && iy < b.y + b.size) {
+            if (ix >= b.x && ix < b.x + b.w && iy >= b.y && iy < b.y + b.h) {
               const g = gridFor(b);
               if (g) {
-                const gx = clamp(Math.floor(((ix - b.x) / b.size) * g.w), 0, g.w - 1);
-                const gy = clamp(Math.floor(((iy - b.y) / b.size) * g.h), 0, g.h - 1);
+                const gx = clamp(Math.floor(((ix - b.x) / b.w) * g.w), 0, g.w - 1);
+                const gy = clamp(Math.floor(((iy - b.y) / b.h) * g.h), 0, g.h - 1);
                 const gi = (gy * g.w + gx) * 4;
                 hex = '#' + [g.d[gi], g.d[gi + 1], g.d[gi + 2]].map((n) => (n ?? 0).toString(16).padStart(2, '0')).join('').toUpperCase();
               }

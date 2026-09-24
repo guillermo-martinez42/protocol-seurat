@@ -50,6 +50,8 @@ export interface SessionEvents {
   onRenovar(r: Renew): void;
   onAuditar(a: Audit): void;
   onProtoError(e: ProtoError): void;
+  onPreviewAbierta?(id: string, a: Abierta): void;
+  onPreviewError?(id: string, e: ProtoError): void;
   onDelivery(bytes: Uint8Array): void;
   onStatus(s: string): void;
 }
@@ -65,6 +67,7 @@ export class SessionClient {
   private bienvenida: Bienvenida | null = null;
   private memMib = declareMemMib();
   private disposed = false;
+  private pendingOpens: Array<{ id: string; preview: boolean }> = [];
 
   constructor(private events: SessionEvents) {}
 
@@ -140,15 +143,29 @@ export class SessionClient {
         case T.LATIDO:
           this.transport?.sendControl(encodeFrame(T.ECO, latidoCore(u64Nonce(payload))));
           break;
-        case T.ERROR:
-          this.events.onProtoError(errorDecode(payload));
+        case T.ERROR: {
+          const err = errorDecode(payload);
+          const req = this.pendingOpens.length > 0 && err.refTipo === T.ABRIR ? this.pendingOpens.shift() : undefined;
+          if (req?.preview) {
+            this.events.onPreviewError?.(req.id, err);
+          } else {
+            this.events.onProtoError(err);
+          }
           break;
+        }
         case T.OBRA:
           this.events.onObra(obraDecode(payload));
           break;
-        case T.ABIERTA:
-          this.events.onAbierta(abiertaDecode(payload));
+        case T.ABIERTA: {
+          const a = abiertaDecode(payload);
+          const req = this.pendingOpens.shift();
+          if (req?.preview) {
+            this.events.onPreviewAbierta?.(req.id, a);
+          } else {
+            this.events.onAbierta(a);
+          }
           break;
+        }
         case T.MIRADA:
           this.events.onStatus('gaze-echo');
           gazeDecode(payload);
@@ -182,6 +199,12 @@ export class SessionClient {
   }
 
   openObra(id: string): void {
+    this.pendingOpens.push({ id, preview: false });
+    this.transport?.sendControl(encodeFrame(T.ABRIR, abrirCore(id)));
+  }
+
+  openPreview(id: string): void {
+    this.pendingOpens.push({ id, preview: true });
     this.transport?.sendControl(encodeFrame(T.ABRIR, abrirCore(id)));
   }
 
