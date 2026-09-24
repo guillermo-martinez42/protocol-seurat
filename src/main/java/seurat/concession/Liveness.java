@@ -7,6 +7,7 @@ import seurat.proto.MsgAudit;
 import seurat.proto.MsgHandshake;
 import seurat.proto.MsgLoans;
 import seurat.proto.ProtoCodes;
+import seurat.proto.Ranges;
 import seurat.session.Canvas;
 import seurat.session.Concession;
 import seurat.session.Session;
@@ -25,6 +26,11 @@ public final class Liveness {
     public void tick() {
         long now = System.nanoTime();
         for (Session session : sessions.all()) {
+            if (session.lastActivityNs > 0
+                    && now - session.lastActivityNs > 3 * SeuratConstants.HEARTBEAT_S * 1_000_000_000L) {
+                close(session, ProtoCodes.ERR_PROTOCOLO, FrameType.LATIDO);
+                continue;
+            }
             for (Canvas canvas : session.canvases().values()) {
                 try {
                     tickCanvas(session, canvas, now);
@@ -47,6 +53,7 @@ public final class Liveness {
                             FrameType.RASPADO, "LIQUIDACION_VENCIDA");
                 }
             }
+            canvas.book().pruneExpired(now);
             if (session.lastGazeNs > 0
                     && now - session.lastGazeNs > SeuratConstants.IDLE_S * 1_000_000_000L
                     && canvas.concession().minStratum() < SeuratConstants.SKETCH_MIN) {
@@ -60,10 +67,12 @@ public final class Liveness {
             }
             if (now - canvas.renewNs > SeuratConstants.RENEW_S * 1_000_000_000L) {
                 canvas.renewNs = now;
+                long order = canvas.nextOrder();
+                Ranges ranges = canvas.book().numbersThrough(canvas.book().lastNumber());
+                canvas.addPendingRenewal(order, ranges);
                 GrantController.send(session, FrameType.RENOVAR,
-                        new MsgAudit.Renew(canvas.handle(), canvas.nextOrder(),
-                                SeuratConstants.LEASE_S, canvas.book().numbersThrough(
-                                        canvas.book().lastNumber())).encode());
+                        new MsgAudit.Renew(canvas.handle(), order,
+                                SeuratConstants.LEASE_S, ranges).encode());
             }
             long done = canvas.book().lastNumber();
             if (now - canvas.auditNs > SeuratConstants.AUDIT_S * 1_000_000_000L
