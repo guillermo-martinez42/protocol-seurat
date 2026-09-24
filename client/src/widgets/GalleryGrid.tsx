@@ -3,7 +3,7 @@ import { hash3 } from '@/shared/lib/hash3';
 import { useWorkPreview } from '@/entities/work';
 import { drawScaledRgba } from '@/shared/codec/seed';
 import type { Work } from '@/entities/work/types';
-import { workDims, orientOf, workTitle } from '@/entities/work/types';
+import { workDims, workTitle } from '@/entities/work/types';
 import type { Filter } from '@/entities/work/store';
 import { Icon } from '@/shared/ui/Icon';
 
@@ -14,9 +14,10 @@ function Thumb({ work }: { work: Work }): JSX.Element {
   useEffect(() => {
     const c = ref.current;
     if (!c) return;
-    const L = orientOf(work) === 'landscape';
-    const w = L ? 144 : 96;
-    const h = L ? 96 : 144;
+    const maxDim = 144;
+    const ar = work.height > 0 ? work.width / work.height : 1;
+    const w = ar >= 1 ? maxDim : Math.max(32, Math.round(maxDim * ar));
+    const h = ar >= 1 ? Math.max(32, Math.round(maxDim / ar)) : maxDim;
     c.width = w;
     c.height = h;
     const ctx = c.getContext('2d');
@@ -80,8 +81,13 @@ export function GalleryGrid({ items, filter, onFilter, onOpen }: Props): JSX.Ele
       </div>
       <div style={{ columns: '300px', columnGap: 24 }}>
         {items.map((w, i) => (
-          <div key={w.id} onClick={() => onOpen(w.id)} className="gallery-card">
-            <div className="gallery-card-thumb" style={{ aspectRatio: orientOf(w) === 'landscape' ? '3 / 2' : '2 / 3' }}>
+          <div
+            key={w.id}
+            onClick={() => onOpen(w.id)}
+            className="gallery-card"
+            style={{ breakInside: 'avoid', pageBreakInside: 'avoid', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32, cursor: 'zoom-in' }}
+          >
+            <div className="gallery-card-thumb" style={{ aspectRatio: `${w.width} / ${w.height}` }}>
               <Thumb work={w} />
             </div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '0 10px' }}>
