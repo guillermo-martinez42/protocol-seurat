@@ -61,4 +61,57 @@ public final class ProtoCodes {
     public static final int ERR_PRESUPUESTO = 10;
     public static final int ERR_INTERNO = 11;
     public static final int ERR_REANUDACION = 12;
+
+    public static String errorName(int code) {
+        return switch (code) {
+            case ERR_PROTOCOLO -> "ERR_PROTOCOLO";
+            case ERR_VERSION -> "ERR_VERSION";
+            case ERR_AUTENTICACION -> "ERR_AUTENTICACION";
+            case ERR_OBRA_INEXISTENTE -> "ERR_OBRA_INEXISTENTE";
+            case ERR_OBRA_NO_LISTA -> "ERR_OBRA_NO_LISTA";
+            case ERR_HANDLE -> "ERR_HANDLE";
+            case ERR_POSESION -> "ERR_POSESION";
+            case ERR_LIQUIDACION -> "ERR_LIQUIDACION";
+            case ERR_TASA -> "ERR_TASA";
+            case ERR_PRESUPUESTO -> "ERR_PRESUPUESTO";
+            case ERR_INTERNO -> "ERR_INTERNO";
+            case ERR_REANUDACION -> "ERR_REANUDACION";
+            default -> "ERR_" + code;
+        };
+    }
+
+    public static String stateName(int state) {
+        return switch (state) {
+            case ST_RECIBIENDO -> "RECIBIENDO";
+            case ST_BOCETO -> "BOCETO";
+            case ST_PINTANDO -> "PINTANDO";
+            case ST_LISTA -> "LISTA";
+            case ST_FALLIDA -> "FALLIDA";
+            case ST_RETIRADA -> "RETIRADA";
+            default -> "ST_" + state;
+        };
+    }
+
+    public static String motiveName(int motive) {
+        return switch (motive) {
+            case MOT_INICIAL -> "INICIAL";
+            case MOT_MIRADA -> "MIRADA";
+            case MOT_POLITICA -> "POLITICA";
+            case MOT_OCULTA -> "OCULTA";
+            case MOT_INACTIVIDAD -> "INACTIVIDAD";
+            case MOT_ROL -> "ROL";
+            default -> "MOT_" + motive;
+        };
+    }
+
+    public static String eventName(int event) {
+        return switch (event) {
+            case OBRA_LISTADO -> "LISTADO";
+            case OBRA_ALTA -> "ALTA";
+            case OBRA_ESTADO -> "ESTADO";
+            case OBRA_EDICION -> "EDICION";
+            case OBRA_BAJA -> "BAJA";
+            default -> "EVENT_" + event;
+        };
+    }
 }

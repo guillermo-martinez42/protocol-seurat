@@ -10,13 +10,13 @@ public final class AuditLog {
     private AuditLog() {}
 
     public static void alert(String msg) {
-        String line = Instant.now() + " ALERT " + msg;
-        QUEUE.add(line);
-        System.err.println(line);
+        QUEUE.add(Instant.now() + " ALERT " + msg);
+        Log.warn("audit", msg);
     }
 
     public static void info(String msg) {
         QUEUE.add(Instant.now() + " INFO " + msg);
+        Log.info("audit", msg);
     }
 
     public static String[] dump() {
