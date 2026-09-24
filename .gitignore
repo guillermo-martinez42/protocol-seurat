@@ -1,3 +1,29 @@
-PROTOCOLO-TRC.md
-Seurat protocol-3.md
-prompt.txt
+/PROTOCOLO-TRC.md
+/Seurat protocol-3.md
+/prompt.txt
+
+# runtime data (created by ingest/server, never committed)
+inbox/
+obras/
+cobertura/
+client/dist/
+/tmp/opencode/
+
+# build outputs
+*.class
+target/
+out/
+*.log
+pnpm-debug.log*
+
+# dependencies (vendored lib/ IS committed; package stores are not)
+node_modules/
+client/node_modules/
+.pnpm-store/
+
+# OS / editors (.opencode/ stays tracked)
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.iml
