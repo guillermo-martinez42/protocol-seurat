@@ -26,7 +26,8 @@ final class CanvasOpener {
                     ProtoCodes.ERR_OBRA_INEXISTENTE, 0, FrameType.ABRIR, "work").encode());
             return;
         }
-        if (work.meta.state() == ProtoCodes.ST_RECIBIENDO
+        if (work.store == null
+                || work.meta.state() == ProtoCodes.ST_RECIBIENDO
                 || work.meta.state() == ProtoCodes.ST_FALLIDA) {
             Log.warn("session", "Session " + session.id() + " open failed: work '" + request.id()
                     + "' not ready (state=" + ProtoCodes.stateName(work.meta.state()) + ")");

@@ -44,7 +44,7 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' dimensions: " + w + "x" + h + ", strata=" + (top + 1));
                 WorkRecord work = catalog.get(id);
                 work.meta = new WorkMeta(id, name, w, h, 256, top + 1,
-                        ProtoCodes.ST_BOCETO, 1, 0, 2);
+                        ProtoCodes.ST_RECIBIENDO, 1, 0, 2);
                 FileBrushStore ed1 = store(top, w, h, 1);
                 SketchBuilder.build(master, ed1, top);
                 ed1.close();

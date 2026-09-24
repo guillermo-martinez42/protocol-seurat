@@ -7,8 +7,10 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
-import seurat.session.Delivery;
+import seurat.proto.Frame;
+import seurat.proto.FrameType;
 import seurat.session.Canvas;
+import seurat.session.Delivery;
 
 /**
  * WebSocket mapping (complete). channel 0 = control, 1 = delivery, 2 = MIRADA.
@@ -45,8 +47,14 @@ public final class WsMapping implements Mapping {
                     continue;
                 }
                 int channel = m.data()[0] & 0xFF;
-                if (channel == 0 || channel == 2) {
+                if (channel == 0) {
                     control.put(Arrays.copyOfRange(m.data(), 1, m.data().length));
+                } else if (channel == 2) {
+                    byte[] raw = Arrays.copyOfRange(m.data(), 1, m.data().length);
+                    if (raw.length > 0 && (raw[0] & 0xFF) == FrameType.MIRADA) {
+                        raw = Arrays.copyOfRange(raw, 1, raw.length);
+                    }
+                    control.put(new Frame(FrameType.MIRADA, raw).encode());
                 }
             }
         } catch (Exception ignored) {

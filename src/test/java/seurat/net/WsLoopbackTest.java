@@ -107,6 +107,13 @@ public final class WsLoopbackTest {
                     700, 0);
             sendWs(out, 0, frame(FrameType.RECIBO, receipt.encode()));
             TestKit.check(flows.fin, "PLAN FIN interleaved");
+            var gaze = new MsgGaze.Gaze(openedMeta.handle(), 1, 0, 0, 1024, 768, 1024, 768, 0);
+            sendWs(out, 2, gaze.encode());
+            Frame responseFrame = readControl(in);
+            if (responseFrame.type() == FrameType.CONCESION) {
+                responseFrame = readControl(in);
+            }
+            TestKit.check(responseFrame.type() == FrameType.PLAN, "PLAN response to canal 2 MIRADA");
         }
         System.out.println("WsLoopbackTest OK");
     }
