@@ -98,17 +98,22 @@ public final class Catalog {
                 }
                 var info = MetaJson.read(dir.getFileName().toString(),
                         Files.readString(meta));
-                int top = info.strata() - 1;
-                int[] nx = new int[top];
-                int[] ny = new int[top];
-                for (int stratum = 0; stratum < top; stratum++) {
-                    nx[stratum] = IngestJob.div256(IngestJob.padTo(info.width(), top)
-                            >> stratum);
-                    ny[stratum] = IngestJob.div256(IngestJob.padTo(info.height(), top)
-                            >> stratum);
-                }
                 WorkRecord work = new WorkRecord(info);
-                work.store = new FileBrushStore(dir, info, nx, ny);
+                if (info.strata() > 0) {
+                    int top = info.strata() - 1;
+                    int[] nx = new int[top];
+                    int[] ny = new int[top];
+                    for (int stratum = 0; stratum < top; stratum++) {
+                        nx[stratum] = IngestJob.div256(IngestJob.padTo(info.width(), top)
+                                >> stratum);
+                        ny[stratum] = IngestJob.div256(IngestJob.padTo(info.height(), top)
+                                >> stratum);
+                    }
+                    Path storeDir = info.edition() == 1 && Files.exists(dir.resolve("ed1"))
+                            ? dir.resolve("ed1")
+                            : dir;
+                    work.store = new FileBrushStore(storeDir, info, nx, ny);
+                }
                 records.put(info.id(), work);
             }
         }

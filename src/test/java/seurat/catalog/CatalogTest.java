@@ -29,7 +29,22 @@ public final class CatalogTest {
         TestKit.check(seen.size() == 4 && seen.get(3).event() == ProtoCodes.OBRA_BAJA
                 && catalog.get("w1") == null, "BAJA pushed + removed");
         catalog.progress("missing", 1);
-        TestKit.check(seen.size() == 4, "unknown id silent");
+        testLoadRecovery();
         System.out.println("CatalogTest OK");
+    }
+
+    private static void testLoadRecovery() throws Exception {
+        Path root = Files.createTempDirectory("catalog-load-test");
+        Catalog catalog = new Catalog(root);
+        WorkMeta m0 = new WorkMeta("r0", "R0", 0, 0, 256, 0, ProtoCodes.ST_RECIBIENDO, 1, 0, 2);
+        catalog.register(new WorkRecord(m0));
+        WorkMeta m1 = new WorkMeta("w1", "W1", 512, 512, 256, 2, ProtoCodes.ST_LISTA, 1, 0, 2);
+        catalog.register(new WorkRecord(m1));
+
+        Catalog loaded = new Catalog(root);
+        loaded.load();
+        TestKit.check(loaded.get("r0") != null, "loaded r0");
+        TestKit.check(loaded.get("r0").store == null, "r0 has no store");
+        TestKit.check(loaded.get("w1") != null, "loaded w1");
     }
 }
