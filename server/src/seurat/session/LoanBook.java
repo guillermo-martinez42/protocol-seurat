@@ -28,16 +28,17 @@ public final class LoanBook {
         return deliveries.size();
     }
 
-    /** Highest band held for a brush; seed counts complete only if present. */
+    /** Bands held contiguously from 0 (a retouch missing its sketch is resent); seed: all or none. */
     public synchronized int bands(BrushId p) {
         TreeMap<Integer, Delivery> group = byBrush.get(p);
-        if (group == null) {
-            return 0;
+        if (group == null || p.stratum() == SeuratConstants.SEED_STRATUM) {
+            return group == null ? 0 : 4;
         }
-        if (p.stratum() == SeuratConstants.SEED_STRATUM) {
-            return 4;
+        int have = 0;
+        for (var e = group.firstEntry(); e != null && e.getKey() <= have; e = group.higherEntry(e.getKey())) {
+            have = Math.max(have, e.getValue().through());
         }
-        return group.lastEntry().getValue().through();
+        return have;
     }
 
     /** Numbers BEFORE opening the flow. */
@@ -137,7 +138,7 @@ public final class LoanBook {
         settled.remove(n);
         TreeMap<Integer, Delivery> group = byBrush.get(e.brush());
         if (group != null) {
-            group.remove(e.from());
+            group.remove(e.from(), e); // a resend from the same band may have replaced it
             if (group.isEmpty()) {
                 byBrush.remove(e.brush());
             }

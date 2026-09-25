@@ -13,6 +13,7 @@ import { useSeurat } from '@/app/providers/SeuratProvider';
 import { patchUi, useUi } from '@/app/store';
 import { counterLabel } from '@/features/navigate-work';
 import { fmtPct } from '@/shared/lib/zoom';
+import { dotsPerSide } from '@/widgets/pointillism';
 import { Icon } from '@/shared/ui/Icon';
 import {
   POINTILLIST_ZOOM_THRESHOLD_PCT,
@@ -60,16 +61,10 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
     sink: seurat.sink,
     concession: seurat.concession,
   });
-  const handleToggleDots = (): void => {
-    if ((view?.s ?? 1) < POINTILLIST_ZOOM_THRESHOLD_PCT / 100) {
-      patchUi({ dots: true });
-      api.current?.zoomTo(POINTILLIST_AUTO_ZOOM);
-    } else {
-      patchUi({ dots: !ui.dots });
-    }
+  // Dots are the view itself, never switched off: the button only dives into them.
+  const handleDiveDots = (): void => {
+    if ((view?.s ?? 1) < POINTILLIST_ZOOM_THRESHOLD_PCT / 100) api.current?.zoomTo(POINTILLIST_AUTO_ZOOM);
   };
-
-  const dotsActive = inDots || (ui.dots && (view?.s ?? 0) >= POINTILLIST_ZOOM_THRESHOLD_PCT / 100);
 
   return (
     <div className={styles.container}>
@@ -81,13 +76,12 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         paintTick={seurat.paintTick}
         gazeService={seurat.gazeService}
         loupe={ui.loupe}
-        dots={ui.dots}
         dotThreshold={POINTILLIST_ZOOM_THRESHOLD_PCT}
         maxZoom={effectiveMaxZoom}
         apiRef={api}
         actions={{
           onToggleLoupe: () => patchUi({ loupe: !ui.loupe }),
-          onToggleDots: handleToggleDots,
+          onDiveDots: handleDiveDots,
           onToggleInfo: () => patchUi({ info: !ui.info }),
           onToggleTelemetry: toggleTelemetry,
           onPrev: () => go(-1),
@@ -115,7 +109,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
       />
       {inDots && (
         <div className={styles.pointillistBanner}>
-          <Icon name="blur_on" size={20} />Pointillist view · 1 dot = 1 pixel
+          <Icon name="blur_on" size={20} />Pointillist view · each pixel = {dotsPerSide(view?.s ?? 1) ** 2} dots
         </div>
       )}
       {loading && (
@@ -129,7 +123,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         menu={ui.menu}
         presets={presets}
         loupe={ui.loupe}
-        dots={dotsActive}
+        dots={inDots}
         onZoomIn={() => api.current?.zoomTo((view?.s ?? 1) * ZOOM_STEP_FACTOR)}
         onZoomOut={() => api.current?.zoomTo((view?.s ?? 1) / ZOOM_STEP_FACTOR)}
         onSlide={(f) => api.current?.slideTo(f)}
@@ -138,14 +132,13 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
           if (p.zoom === null) api.current?.fit(false);
           else {
             api.current?.zoomTo(p.zoom / 100);
-            if (p.zoom >= POINTILLIST_ZOOM_THRESHOLD_PCT) patchUi({ dots: true });
           }
           patchUi({ menu: false });
         }}
         onFit={() => api.current?.fit(false)}
         onOneToOne={() => api.current?.zoomTo(1)}
         onToggleLoupe={() => patchUi({ loupe: !ui.loupe })}
-        onToggleDots={handleToggleDots}
+        onDiveDots={handleDiveDots}
       />
       <ViewerMinimap api={api} view={view} iw={iw} ih={ih} ready={ready} sink={seurat.sink} paintTick={seurat.paintTick} />
       {ui.info && <ViewerInfoPanel rows={rows} onClose={() => patchUi({ info: false })} />}

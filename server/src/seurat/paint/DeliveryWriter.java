@@ -49,10 +49,13 @@ final class DeliveryWriter {
                 crcs[i] = crc.getValue();
                 lengths[i] = bandBytes[i].length;
             }
+            // The store's own table: works ingested before table 2 still decode right.
+            int table = canvas.store() instanceof seurat.store.FileBrushStore s
+                    ? s.quantTable : Quant.TABLE;
             var head = new Headers.BrushHead(canvas.handle(), delivery.number(),
                     delivery.brush().id(), delivery.from(), delivery.through(),
-                    delivery.epoch(), Quant.qy(delivery.brush().stratum()),
-                    Quant.qc(delivery.brush().stratum()), canvas.meta().edition(),
+                    delivery.epoch(), Quant.qy(table, delivery.brush().stratum()),
+                    Quant.qc(table, delivery.brush().stratum()), canvas.meta().edition(),
                     crcs, lengths);
             try (OutputStream out = session.mapping().openDelivery(canvas, delivery)) {
                 out.write(head.encode());

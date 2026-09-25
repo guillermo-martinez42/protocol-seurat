@@ -7,9 +7,6 @@ export const IMAGE_SMOOTHING_THRESHOLD = 2;
 export const DOT_FADE_RAMP_FACTOR = 0.75;
 export const MAX_BACKGROUND_DIM = 0.9;
 
-export const PIXEL_GRID_THRESHOLD = 16;
-export const PIXEL_GRID_LINE_WIDTH = 1;
-
 export const FRAME_SHADOW_PADDING = 40;
 export const FRAME_SHADOW_BLUR = 48;
 export const FRAME_SHADOW_OFFSET_Y = 12;
@@ -30,10 +27,9 @@ export const LOADER_ORBIT_RADIUS = 24;
 export const LOADER_ORBIT_PULSE = 4;
 export const LOADER_DOT_BASE_RADIUS = 2.5;
 
-export const DOT_GROWTH_BASE = 0.4;
-export const DOT_GROWTH_RANGE = 0.6;
-export const DOT_JITTER_MAX = 0.24;
-export const DOT_RADIUS_BASE = 0.33;
-export const DOT_RADIUS_VARIATION = 0.15;
+/** Pointillist view: dots stay ~this many CSS px apart; each image pixel is split into n×n of them. */
+export const DOT_SPACING_PX = 6;
+/** Dots per side of the repeating jittered tile (big enough that the repeat is not visible). */
+export const DOT_TILE_CELLS = 32;
 
 export const HERO_GRID_CELL = 11;

@@ -52,25 +52,6 @@ final class Coverage {
         int at = i / 2;
         int b = table.get(at) & 0xFF;
         b = (i % 2 == 0) ? (b & 0xF0) | (through & 0xF) : (b & 0xF) | ((through & 0xF) << 4);
-        table.put(at, (byte) b);
-        channel.force(false);
-    }
-
-    synchronized double fraction(int stratum) {
-        int n = stratum == 0 ? n0 : n1;
-        if (n == 0) {
-            return 1;
-        }
-        int off = stratum == 0 ? 0 : n0;
-        int covered = 0;
-        for (int i = 0; i < n; i++) {
-            int at = (off + i) / 2;
-            int b = table.get(at) & 0xFF;
-            int v = ((off + i) % 2 == 0) ? b & 0xF : (b >>> 4) & 0xF;
-            if (v > 0) {
-                covered++;
-            }
-        }
-        return (double) covered / n;
+        table.put(at, (byte) b); // mapped: the OS writes it back; no fsync per band
     }
 }

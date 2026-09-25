@@ -35,40 +35,27 @@ public final class BrushBudget {
             if (newBands == 0) {
                 return true;
             }
-            if (seen.fraction(stratum) >= capacity(role, stratum)
-                    || !bucket(principal, work, stratum, role).take(newBands)) {
+            if (!bucket(principal, work, stratum, role).take(newBands)) {
                 return false;
             }
             seen.set(p, through);
             return true;
         } catch (IOException ex) {
+            seurat.observe.Log.warn("budget", "coverage unavailable for " + work + ": " + ex);
             return false;
         }
     }
 
-    private static double capacity(String role, int stratum) {
-        if (role.equals(seurat.catalog.WorkRecord.PRIVILEGED)) {
-            return stratum == 0 ? 0.30 : 1.0;
-        }
-        if (role.equals("autenticado")) {
-            return stratum == 0 ? 0.15 : 1.0;
-        }
-        return stratum == 1 ? 0.25 : 0.0;
-    }
-
+    /**
+     * Band rate limit per role: generous enough to zoom anywhere at full detail, slow
+     * enough that sweeping all of level 0 takes hours. (A coverage-percentage cap was
+     * dropped: every anonymous viewer shares one principal, so it locked out everyone.)
+     */
     private TokenBucket bucket(String principal, String work, int stratum, String role) {
-        long capacity;
-        double rate;
-        if (role.equals(seurat.catalog.WorkRecord.PRIVILEGED)) {
-            capacity = 200000;
-            rate = 100;
-        } else if (role.equals(seurat.catalog.WorkRecord.AUTHENTICATED)) {
-            capacity = stratum == 0 ? 20000 : 200000;
-            rate = stratum == 0 ? 10 : 100;
-        } else {
-            capacity = 1000;
-            rate = 1;
-        }
+        boolean priv = role.equals(seurat.catalog.WorkRecord.PRIVILEGED);
+        boolean auth = role.equals(seurat.catalog.WorkRecord.AUTHENTICATED);
+        long capacity = priv ? 200_000 : auth ? 100_000 : 50_000;
+        double rate = priv ? 1_000 : auth ? 400 : 200;
         return buckets.computeIfAbsent(principal + "\0" + work + "\0" + stratum,
                 k -> new TokenBucket(capacity, rate));
     }
@@ -78,9 +65,9 @@ public final class BrushBudget {
         String k = principal + "\0" + work;
         Coverage c = coverages.get(k);
         if (c == null) {
-            Path dir = base.resolve(principal);
-            Files.createDirectories(dir);
-            c = new Coverage(dir.resolve(work + ".bits"), meta);
+            Path file = base.resolve(principal).resolve(work + ".bits");
+            Files.createDirectories(file.getParent()); // work ids may nest: img-peq/name
+            c = new Coverage(file, meta);
             coverages.put(k, c);
         }
         return c;

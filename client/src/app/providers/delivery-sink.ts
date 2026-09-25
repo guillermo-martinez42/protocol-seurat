@@ -1,11 +1,15 @@
 import { RECEIPT_EVERY_N, RECEIPT_EVERY_MS, RELEASE_BATCH_MS } from '@/shared/config/constants';
 import { receiverWindow } from '@/entities/delivery/credit';
+import { DecodeQueue } from '@/entities/delivery/decode-queue';
 import { makeBrushId, parseBrushHead, splitBrushId, sliceBands, verifyBand } from '@/shared/proto/brush';
 import type { Scrape } from '@/shared/proto/messages';
 import { matchesScrape as scrapeMatches } from '@/entities/delivery/scrape';
 import { effectiveExpiry, emptyLedger, ownedBytes, ownedDeliveries, type DeliveryLedger, type DeliveryRecord } from '@/entities/delivery/store';
 import type { SynthRequest } from '@/workers/protocol';
 import type { SessionClient } from './session-client';
+
+/** cola_ms from which the server caps or stops plans (ConePlanner: 150 / 400). */
+const COLA_BUSY_MS = 150;
 
 interface PendingScrape {
   order: number;
@@ -22,7 +26,7 @@ export class DeliverySink {
   private receiptTimer = 0;
   private releaseTimer = 0;
   private expiredQueue: number[] = [];
-  private queueMs = 0;
+  private readonly decode = new DecodeQueue();
   private scrapes: PendingScrape[] = [];
   private cancelled = new Set<number>();
   private settledBelow: number | null = null;
@@ -33,6 +37,10 @@ export class DeliverySink {
   private nextSynthesisId = 1;
   private activeSynthesis = new Map<number, number>();
   private repaint = (): void => undefined;
+  private view: { x0: number; y0: number; x1: number; y1: number; focus: number } | null = null;
+  private lastFree = -1;
+  private lastQueue = 0;
+  private lastRenew = 0;
 
   constructor(
     public readonly handle: number,
@@ -53,6 +61,9 @@ export class DeliverySink {
     const w = new Worker(new URL('../../workers/synthesis.worker.ts', import.meta.url), { type: 'module' });
     w.onmessage = (ev: MessageEvent) => {
       const out = ev.data as { delivery: number; synthesisId: number; ok: boolean; error?: string; rgba: ArrayBuffer | null; planes: ArrayBuffer[] | null; width: number; height: number; elapsedMs: number };
+      this.decode.answered(out.elapsedMs);
+      // The server plans nothing while the last cola_ms said we were busy (spec §6.1): tell it we caught up.
+      if (this.lastQueue >= COLA_BUSY_MS && this.decode.ms < COLA_BUSY_MS) this.flushReceipt();
       if (this.activeSynthesis.get(out.delivery) !== out.synthesisId) return;
       if (!out.ok || !out.rgba) {
         this.failSynthesis(out.delivery);
@@ -66,6 +77,7 @@ export class DeliverySink {
           }
           const rec = this.book.byDelivery.get(out.delivery);
           if (rec) {
+            rec.rgba?.close(); // a resynthesis keeps showing the old image until this one lands
             rec.rgba = bmp;
             rec.planes = out.planes;
             rec.pending = false;
@@ -73,7 +85,6 @@ export class DeliverySink {
               rec.receiptQueued = true;
               this.book.pendingReceipt.push(out.delivery);
             }
-            this.queueMs = Math.max(0, this.queueMs - out.elapsedMs);
             this.notifyPaint();
             this.resynthesizeChildren(out.delivery);
             this.flushPending();
@@ -152,11 +163,6 @@ export class DeliverySink {
     };
     this.book.byDelivery.set(h.delivery, rec);
     this.book.inFlight.add(h.delivery);
-    const transfer: ArrayBuffer[] = bands.map((b) => {
-      const ab = new ArrayBuffer(b.length);
-      new Uint8Array(ab).set(b);
-      return ab;
-    });
     const req: SynthRequest = {
       delivery: h.delivery,
       synthesisId: this.nextSynthesisId++,
@@ -166,19 +172,11 @@ export class DeliverySink {
       seed: split.stratum === 10,
       seedWidth: this.seedWidth,
       seedHeight: this.seedHeight,
-      bands: transfer,
+      bands: this.brushBands(rec),
     };
     const parent = this.parentFor(split.stratum, split.bx, split.by, h.edition, h.epoch);
     if (parent) this.linkParent(h.delivery, parent.delivery);
-    if (parent?.planes) {
-      const sourceX = parent.stratum === 10 ? split.bx * 128 : (split.bx & 1) * 128;
-      const sourceY = parent.stratum === 10 ? split.by * 128 : (split.by & 1) * 128;
-      req.parentPlanes = parent.planes.map((plane) => plane.slice(0));
-      req.parentPlaneWidth = parent.stratum === 10 ? this.seedWidth : 256;
-      req.parentPlaneHeight = parent.stratum === 10 ? this.seedHeight : 256;
-      req.parentX = sourceX;
-      req.parentY = sourceY;
-    }
+    if (parent?.planes) this.withParent(req, parent, split.bx, split.by);
     if (split.stratum < 10 && !parent?.planes) {
       const isCoarsest = split.stratum + 1 >= this.top;
       const parentId = isCoarsest
@@ -196,7 +194,7 @@ export class DeliverySink {
       const transfers = [...req.bands];
       if (req.parentPlanes) transfers.push(...req.parentPlanes);
       this.ensureWorker().postMessage(req, { transfer: transfers });
-      this.queueMs += 5;
+      this.decode.posted();
     } catch {
       this.failSynthesis(req.delivery);
     }
@@ -204,19 +202,13 @@ export class DeliverySink {
 
   private flushPending(): void {
     for (const [delivery, item] of this.pending) {
-      const parent = [...this.book.byDelivery.values()].find(
-        (r) => r.brushId === item.parentId && r.edition === item.edition && r.epoch <= (this.book.byDelivery.get(delivery)?.epoch ?? r.epoch),
-      );
+      const rec = this.book.byDelivery.get(delivery);
+      if (!rec) continue;
+      const { stratum, bx, by } = splitBrushId(rec.brushId);
+      const parent = this.parentFor(stratum, bx, by, item.edition, rec.epoch);
       if (!parent?.planes) continue;
       this.linkParent(delivery, parent.delivery);
-      const { bx, by } = splitBrushId(
-        this.book.byDelivery.get(delivery)?.brushId ?? 0n,
-      );
-      item.req.parentPlanes = parent.planes.map((plane) => plane.slice(0));
-      item.req.parentPlaneWidth = parent.stratum === 10 ? this.seedWidth : 256;
-      item.req.parentPlaneHeight = parent.stratum === 10 ? this.seedHeight : 256;
-      item.req.parentX = parent.stratum === 10 ? bx * 128 : (bx & 1) * 128;
-      item.req.parentY = parent.stratum === 10 ? by * 128 : (by & 1) * 128;
+      this.withParent(item.req, parent, bx, by);
       this.pending.delete(delivery);
       this.dispatch(item.req);
     }
@@ -228,13 +220,36 @@ export class DeliverySink {
     const parentId = isCoarsest
       ? makeBrushId(10, 0, 0)
       : makeBrushId(stratum + 1, bx >> 1, by >> 1);
+    // Synthesized first, then the newest: it decoded the most of its brush's bands.
     return [...this.book.byDelivery.values()]
       .filter((rec) => rec.brushId === parentId && (edition === undefined || rec.edition === edition))
       .filter((rec) => epoch === undefined || rec.epoch <= epoch)
-      .sort((a, b) => b.epoch - a.epoch)[0] ?? null;
+      .sort((a, b) => b.epoch - a.epoch || Number(b.planes != null) - Number(a.planes != null) || b.delivery - a.delivery)[0] ?? null;
+  }
+
+  /** Each delivery of a brush carries some of its bands (disjoint masks): synthesis decodes them all. */
+  private brushBands(rec: DeliveryRecord): ArrayBuffer[] {
+    return this.sameBrush(rec).flatMap((r) => (r.bands ?? []).map((b) => b.slice(0)));
+  }
+
+  private sameBrush(rec: DeliveryRecord): DeliveryRecord[] {
+    return [...this.book.byDelivery.values()].filter((r) => r.brushId === rec.brushId && r.edition === rec.edition);
+  }
+
+  private withParent(req: SynthRequest, parent: DeliveryRecord, bx: number, by: number): void {
+    const seed = parent.stratum === 10;
+    req.parentPlanes = (parent.planes ?? []).map((plane) => plane.slice(0));
+    req.parentPlaneWidth = seed ? this.seedWidth : 256;
+    req.parentPlaneHeight = seed ? this.seedHeight : 256;
+    req.parentX = seed ? bx * 128 : (bx & 1) * 128;
+    req.parentY = seed ? by * 128 : (by & 1) * 128;
   }
 
   private linkParent(child: number, parent: number): void {
+    // Re-linking (sketch parent -> synthesized parent) moves the link; a stale one would make the old
+    // parent look like it still has children, so eviction could never drop it.
+    const old = this.book.parentOf.get(child);
+    if (old !== undefined && old !== parent) this.book.childrenOf.get(old)?.delete(child);
     this.book.parentOf.set(child, parent);
     const children = this.book.childrenOf.get(parent) ?? new Set<number>();
     children.add(child);
@@ -289,24 +304,28 @@ export class DeliverySink {
     this.release(removed, 2);
   }
 
+  /**
+   * The newest synthesis of a brush holds its best planes: children hung on any of its deliveries
+   * (e.g. the [0,2) sketch before this retouch) are redone on it. Older deliveries of the same
+   * brush don't cascade, so a retouch costs one pass per level, not one per delivery.
+   */
   private resynthesizeChildren(parentDelivery: number): void {
-    for (const childId of this.book.childrenOf.get(parentDelivery) ?? []) {
+    const parent = this.book.byDelivery.get(parentDelivery);
+    if (!parent?.planes) return;
+    const siblings = this.sameBrush(parent);
+    if (siblings.some((s) => s.delivery > parent.delivery)) return;
+    const children = siblings.flatMap((s) => [...(this.book.childrenOf.get(s.delivery) ?? [])]);
+    for (const childId of children) {
       const child = this.book.byDelivery.get(childId);
-      const parent = this.book.byDelivery.get(parentDelivery);
-      if (!child || !parent?.planes || !child.bands) continue;
+      if (!child?.bands || child.epoch < parent.epoch || this.pending.has(childId)) continue; // flushPending sends those
+      if (this.sameBrush(child).some((s) => s.delivery > child.delivery)) continue; // the newer one decodes these bands too
       const { stratum, bx, by } = splitBrushId(child.brushId);
       const req: SynthRequest = {
         delivery: child.delivery, synthesisId: this.nextSynthesisId++, stratum, qY: child.qY ?? 0, qC: child.qC ?? 0,
         seed: stratum === 10, seedWidth: this.seedWidth, seedHeight: this.seedHeight,
-        bands: child.bands.map((b) => b.slice(0)),
-        parentPlanes: parent.planes.map((p) => p.slice(0)),
-        parentPlaneWidth: parent.stratum === 10 ? this.seedWidth : 256,
-        parentPlaneHeight: parent.stratum === 10 ? this.seedHeight : 256,
-        parentX: parent.stratum === 10 ? bx * 128 : (bx & 1) * 128,
-        parentY: parent.stratum === 10 ? by * 128 : (by & 1) * 128,
+        bands: this.brushBands(child),
       };
-      child.rgba?.close();
-      child.rgba = null;
+      this.withParent(req, parent, bx, by);
       child.pending = true;
       this.dispatch(req);
     }
@@ -390,25 +409,63 @@ export class DeliverySink {
     }
   }
 
-  voluntaryEvict(centerX: number, centerY: number, inCone: (id: bigint) => boolean): void {
-    const owned = ownedDeliveries(this.book);
-    if (owned.length + this.book.inFlight.size < this.maxBrushes() - 8 && ownedBytes(this.book) <= this.maxKiB() * 0.9) return;
-    const childCount = new Map<string, number>();
-    for (const rec of this.book.byDelivery.values()) {
-      const p = parentKey(rec.brushId, rec.stratum);
-      childCount.set(p, (childCount.get(p) ?? 0) + 1);
+  /**
+   * The view the last MIRADA described (image px). Moving away is what makes old brushes
+   * evictable; if that frees room, a RECIBO tells the server the window reopened.
+   */
+  setView(x0: number, y0: number, x1: number, y1: number, vw: number, vh: number): void {
+    const ideal = Math.log2(Math.max((x1 - x0) / Math.max(1, vw), (y1 - y0) / Math.max(1, vh)));
+    const focus = Math.max(0, Math.min(this.top - 1, Math.floor(ideal)));
+    this.view = { x0, y0, x1, y1, focus };
+    if (this.relieve()) this.flushReceipt();
+  }
+
+  /**
+   * §5.2.3 voluntary eviction. Under pressure (owned + in flight ≥ max − 8, or bytes > 90 %)
+   * drop leaf brushes — no owned children — until 75 % full: first those outside the cone (finer
+   * than the focus, or beyond the planner's outer ring), then the finest stratum, then the
+   * farthest from the gaze. Never the sketch nor the cone's core (focus and its ancestors over
+   * the view). Whole brushes go, all deliveries at once, with SOLTAR reason 1.
+   */
+  private relieve(): boolean {
+    const maxN = this.maxBrushes();
+    const maxB = this.maxKiB() * 1024;
+    const load = (): number => this.book.byDelivery.size + this.book.inFlight.size;
+    if (load() < maxN - 8 && ownedBytes(this.book) <= 0.9 * maxB) return false;
+    const sketch = Math.min(7, Math.max(0, this.top - 1));
+    const v = this.view;
+    const cx = v ? (v.x0 + v.x1) / 2 : 0;
+    const cy = v ? (v.y0 + v.y1) / 2 : 0;
+    const released: number[] = [];
+    const over = (): boolean => load() > 0.75 * maxN || ownedBytes(this.book) > 0.75 * maxB;
+    while (over()) {
+      const brushes = new Map<string, DeliveryRecord[]>();
+      for (const r of this.book.byDelivery.values()) {
+        const k = r.brushId.toString() + '/' + r.edition;
+        brushes.set(k, [...(brushes.get(k) ?? []), r]);
+      }
+      const ranked: Array<{ recs: DeliveryRecord[]; outside: number; stratum: number; dist: number }> = [];
+      for (const recs of brushes.values()) {
+        const { stratum, bx, by } = splitBrushId(recs[0]!.brushId);
+        const hasKids = recs.some((r) => [...(this.book.childrenOf.get(r.delivery) ?? [])].some((k) => this.book.byDelivery.has(k)));
+        if (stratum >= sketch || hasKids) continue;
+        const side = 256 * 2 ** stratum;
+        const [x0, y0] = [bx * side, by * side];
+        const hits = (m: number): boolean => !!v && stratum >= v.focus
+          && x0 < cx + (v.x1 - cx) * m && x0 + side > cx - (cx - v.x0) * m
+          && y0 < cy + (v.y1 - cy) * m && y0 + side > cy - (cy - v.y0) * m;
+        if (hits(1)) continue; // core: what is on screen now
+        ranked.push({ recs, outside: hits(4) ? 1 : 0, stratum, dist: Math.hypot(x0 + side / 2 - cx, y0 + side / 2 - cy) });
+      }
+      if (ranked.length === 0) break;
+      ranked.sort((a, b) => a.outside - b.outside || a.stratum - b.stratum || b.dist - a.dist);
+      for (const { recs } of ranked) {
+        if (!over()) break;
+        for (const r of recs) if (this.book.byDelivery.has(r.delivery)) released.push(...this.removeSubtree(r.delivery, 0));
+      }
     }
-    const leaves = [...this.book.byDelivery.values()].filter(
-      (r) => (childCount.get(r.brushId.toString()) ?? 0) === 0 && r.stratum < 7 && !inCone(r.brushId),
-    );
-    leaves.sort((a, b) => b.stratum - a.stratum || distScore(b, centerX, centerY) - distScore(a, centerX, centerY));
-    const drop = leaves.slice(0, Math.max(1, Math.floor(leaves.length / 4)));
-    const nums: number[] = [];
-    for (const r of drop) {
-      r.rgba?.close();
-      nums.push(...this.removeSubtree(r.delivery, 0));
-    }
-    this.release(nums, 1);
+    this.release(released, 1);
+    return released.length > 0;
   }
 
   /**
@@ -425,7 +482,7 @@ export class DeliverySink {
   }
 
   get queueDepthMs(): number {
-    return this.queueMs;
+    return this.decode.ms;
   }
 
   get avgDeliveryBytes(): number {
@@ -471,9 +528,16 @@ export class DeliverySink {
 
   private flushReceipt(): void {
     this.flushRelease();
+    this.relieve(); // §5.2.3: SOLTAR LRU goes out before anything that depends on the count
     const q = this.book.pendingReceipt;
+    const free = this.free();
+    const queue = Math.round(this.decode.ms);
+    // Nothing the server acts on changed: no new receipts, window, backlog or renewal to confirm.
+    if (q.length === 0 && free === this.lastFree && queue === this.lastQueue && this.renewThrough === this.lastRenew) return;
     this.book.pendingReceipt = [];
-    if (q.length === 0 && this.renewThrough === 0) return;
+    this.lastFree = free;
+    this.lastQueue = queue;
+    this.lastRenew = this.renewThrough;
     for (const n of q) this.book.inFlight.delete(n);
     for (const n of q) {
       const rec = this.book.byDelivery.get(n);
@@ -482,7 +546,7 @@ export class DeliverySink {
         rec.receiptSent = true;
       }
     }
-    this.client()?.sendReceipt(this.handle, [...q].sort((a, b) => a - b), Math.round(this.queueMs), this.free(), this.renewThrough);
+    this.client()?.sendReceipt(this.handle, [...q].sort((a, b) => a - b), queue, free, this.renewThrough);
   }
 
   matchesScrape(rec: DeliveryRecord, predicate: number, params: Uint8Array): boolean {
@@ -500,16 +564,4 @@ export class DeliverySink {
     for (const rec of this.book.byDelivery.values()) rec.rgba?.close();
     this.book = emptyLedger();
   }
-}
-
-function parentKey(id: bigint, s: number): string {
-  void s;
-  return ((id >> 2n) | (BigInt(s + 1) << 56n)).toString();
-}
-
-function distScore(r: DeliveryRecord, cx: number, cy: number): number {
-  void r;
-  void cx;
-  void cy;
-  return 0;
 }

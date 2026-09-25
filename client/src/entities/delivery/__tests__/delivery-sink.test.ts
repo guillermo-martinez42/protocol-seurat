@@ -298,4 +298,98 @@ describe('DeliverySink', () => {
     sink.dispose();
     vi.useRealTimers();
   });
+
+  it('tells the server when a busy decode queue drains, so plans resume without waiting for a renewal', () => {
+    const client = fakeClient();
+    const worker = { onmessage: null as ((event: MessageEvent) => void) | null };
+    vi.stubGlobal('Worker', class {
+      get onmessage() { return worker.onmessage; }
+      set onmessage(value: ((event: MessageEvent) => void) | null) { worker.onmessage = value; }
+      postMessage = vi.fn();
+      terminate = vi.fn();
+    });
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
+    for (let n = 1; n <= 40; n++) { // 40 syntheses in the worker ≈ 200 ms of backlog
+      sink.ingest(makeDeliveryBytes({ handle: 1, delivery: n, brushId: makeBrushId(10, 0, 0), from: 0, through: 1, epoch: 1 }), () => 1000, () => {}, 120);
+    }
+    sink.applyRenew([], 1, 120, () => 1000);
+    expect(client.sentReceipt.at(-1)?.queueMs).toBeGreaterThanOrEqual(150);
+    for (let n = 0; n < 40; n++) {
+      worker.onmessage?.({ data: { delivery: 999, synthesisId: -1, ok: false, rgba: null, planes: null, elapsedMs: 5 } } as MessageEvent);
+    }
+    expect(client.sentReceipt).toHaveLength(2);
+    expect(client.sentReceipt.at(-1)?.queueMs).toBeLessThan(150);
+    sink.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it('re-linking a child to a new parent leaves no stale link on the old one', () => {
+    const sink = new DeliverySink(1, () => fakeClient(), () => 36864, () => 768);
+    const link = (sink as unknown as { linkParent: (c: number, p: number) => void }).linkParent.bind(sink);
+    link(5, 1);
+    link(5, 2);
+    expect(sink.book.childrenOf.get(1)?.has(5)).toBe(false);
+    expect(sink.book.childrenOf.get(2)?.has(5)).toBe(true);
+    sink.dispose();
+  });
+
+  it('moving away evicts the farthest brushes (SOLTAR 1) and a RECIBO reopens the window', () => {
+    const client = fakeClient();
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 40);
+    for (let bx = 0; bx < 36; bx++) { // a row of level-0 brushes; delivery n = bx + 1
+      sink.book.byDelivery.set(bx + 1, {
+        delivery: bx + 1, brushId: makeBrushId(0, bx, 0), stratum: 0,
+        from: 0, through: 4, bytes: 10, epoch: 1, edition: 1, expires: 1e12, rgba: null,
+      });
+    }
+    sink.setView(0, 0, 512, 512, 512, 512); // on screen: bx 0 and 1
+
+    expect(client.sentRelease).toEqual([{ handle: 1, reason: 1, ranges: [31, 32, 33, 34, 35, 36] }]);
+    expect(sink.book.byDelivery.has(1) && sink.book.byDelivery.has(2)).toBe(true);
+    expect(client.sentReceipt.at(-1)?.free).toBe(10); // 40 max - 30 held
+    sink.dispose();
+  });
+
+  it('a retouch decodes the bands its brush already holds, and children are redone on it', async () => {
+    const client = fakeClient();
+    const postMessage = vi.fn();
+    const worker = { onmessage: null as ((event: MessageEvent) => void) | null };
+    vi.stubGlobal('Worker', class {
+      get onmessage() { return worker.onmessage; }
+      set onmessage(value: ((event: MessageEvent) => void) | null) { worker.onmessage = value; }
+      postMessage = postMessage;
+      terminate = vi.fn();
+    });
+    vi.stubGlobal('ImageData', class {
+      constructor(public data: Uint8ClampedArray, public width: number, public height: number) {}
+    });
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ close: vi.fn() })));
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
+    sink.book.byDelivery.set(1, {
+      delivery: 1, brushId: makeBrushId(10, 0, 0), stratum: 10,
+      from: 0, through: 4, bytes: 5, epoch: 1, edition: 1, expires: 121000, rgba: null, planes: [new ArrayBuffer(2)],
+    });
+    const brush = makeBrushId(9, 0, 0);
+    sink.ingest(makeDeliveryBytes({ handle: 1, delivery: 2, brushId: brush, from: 0, through: 1, epoch: 1 }), () => 1000, () => {}, 120);
+    sink.book.byDelivery.set(4, {
+      delivery: 4, brushId: makeBrushId(8, 0, 0), stratum: 8,
+      from: 0, through: 1, bytes: 5, epoch: 1, edition: 1, expires: 121000, rgba: null, bands: [new ArrayBuffer(1)],
+    });
+    sink.book.childrenOf.set(2, new Set([4]));
+    sink.ingest(makeDeliveryBytes({ handle: 1, delivery: 3, brushId: brush, from: 1, through: 2, epoch: 1 }), () => 1000, () => {}, 120);
+
+    const retouch = postMessage.mock.calls[1]?.[0] as { delivery: number; synthesisId: number; bands: ArrayBuffer[] };
+    expect(retouch.delivery).toBe(3);
+    expect(retouch.bands).toHaveLength(2); // [0,1) from delivery 2 + its own [1,2)
+
+    worker.onmessage?.({ data: { delivery: 3, synthesisId: retouch.synthesisId, ok: true,
+      rgba: new ArrayBuffer(4), planes: [new ArrayBuffer(6)], width: 1, height: 1, elapsedMs: 1 } } as MessageEvent);
+    await Promise.resolve();
+    await Promise.resolve();
+    const redo = postMessage.mock.calls[2]?.[0] as { delivery: number; parentPlanes: ArrayBuffer[] };
+    expect(redo.delivery).toBe(4); // hung on the sketch (2), rebuilt on the retouch's planes
+    expect(redo.parentPlanes[0]?.byteLength).toBe(6);
+    sink.dispose();
+    vi.unstubAllGlobals();
+  });
 });

@@ -17,8 +17,6 @@ import {
   IMAGE_SMOOTHING_THRESHOLD,
   DOT_FADE_RAMP_FACTOR,
   MAX_BACKGROUND_DIM,
-  PIXEL_GRID_THRESHOLD,
-  PIXEL_GRID_LINE_WIDTH,
   FRAME_SHADOW_PADDING,
   FRAME_SHADOW_BLUR,
   FRAME_SHADOW_OFFSET_Y,
@@ -71,7 +69,7 @@ export interface ChromeApi {
 
 export interface ChromeActions {
   onToggleLoupe(): void;
-  onToggleDots(): void;
+  onDiveDots(): void;
   onToggleInfo(): void;
   onToggleTelemetry(): void;
   onPrev(): void;
@@ -88,7 +86,6 @@ interface Props {
   paintTick: number;
   gazeService: GazeSender | null;
   loupe: boolean;
-  dots: boolean;
   dotThreshold: number;
   maxZoom: number;
   apiRef: { current: ChromeApi | null };
@@ -116,6 +113,7 @@ export function ViewerChrome(props: Props): JSX.Element {
     mouse: null as { mx: number; my: number } | null,
     uiKey: '',
     scratchCanvas: document.createElement('canvas'),
+    loupeCanvas: document.createElement('canvas'),
     scratch1x1: document.createElement('canvas'),
   });
   const propsRef = useRef(props);
@@ -236,12 +234,12 @@ export function ViewerChrome(props: Props): JSX.Element {
       ctx.fill();
     }
 
-    function layer(tx: number, ty: number, s: number, cx0: number, cy0: number, cx1: number, cy1: number): void {
+    function layer(tx: number, ty: number, s: number, cx0: number, cy0: number, cx1: number, cy1: number,
+      scratch = st.scratchCanvas): void {
       if (!ctx) return;
-      const p = P();
       const list = brushes();
       if (list.length === 0) return;
-      const dotsOn = p.dots && s >= th();
+      const dotsOn = s >= th(); // always dots once a pixel is big enough to hold several
       const f = dotsOn ? Math.min(1, (s - th()) / (th() * DOT_FADE_RAMP_FACTOR)) : 0;
       ctx.imageSmoothingEnabled = s < IMAGE_SMOOTHING_THRESHOLD;
       for (const b of list) {
@@ -255,31 +253,7 @@ export function ViewerChrome(props: Props): JSX.Element {
       }
       ctx.globalAlpha = 1;
       if (dotsOn) {
-        drawPointillism(ctx, {
-          tx, ty, s, cx0, cy0, cx1, cy1,
-          iw: p.iw, ih: p.ih, f,
-          brushes: list,
-          scratchCanvas: st.scratchCanvas,
-        });
-      } else if (s >= PIXEL_GRID_THRESHOLD) {
-        const x0 = Math.max(0, Math.floor((cx0 - tx) / s));
-        const y0 = Math.max(0, Math.floor((cy0 - ty) / s));
-        const x1 = Math.min(p.iw, Math.ceil((cx1 - tx) / s));
-        const y1 = Math.min(p.ih, Math.ceil((cy1 - ty) / s));
-        ctx.strokeStyle = 'rgba(13,14,19,0.35)';
-        ctx.lineWidth = PIXEL_GRID_LINE_WIDTH;
-        ctx.beginPath();
-        for (let x = x0; x <= x1; x++) {
-          const X = Math.round(tx + x * s) + 0.5;
-          ctx.moveTo(X, ty + y0 * s);
-          ctx.lineTo(X, ty + y1 * s);
-        }
-        for (let y = y0; y <= y1; y++) {
-          const Y = Math.round(ty + y * s) + 0.5;
-          ctx.moveTo(tx + x0 * s, Y);
-          ctx.lineTo(tx + x1 * s, Y);
-        }
-        ctx.stroke();
+        drawPointillism(ctx, { tx, ty, s, cx0, cy0, cx1, cy1, brushes: list, scratchCanvas: scratch });
       }
     }
 
@@ -338,7 +312,7 @@ export function ViewerChrome(props: Props): JSX.Element {
           ctx.beginPath();
           ctx.rect(ltx, lty, p.iw * L, p.ih * L);
           ctx.clip();
-          layer(ltx, lty, L, mx - R, my - R, mx + R, my + R);
+          layer(ltx, lty, L, mx - R, my - R, mx + R, my + R, st.loupeCanvas);
           if (L >= LOUPE_PIXEL_OUTLINE_ZOOM) {
             const px = Math.floor(ix);
             const py = Math.floor(iy);
@@ -401,7 +375,7 @@ export function ViewerChrome(props: Props): JSX.Element {
           px = { x: ix.toLocaleString('en-US'), y: iy.toLocaleString('en-US'), hex };
         }
       }
-      const inDots = p.dots && v.s >= th();
+      const inDots = v.s >= th();
       const key = pct.toFixed(2) + '|' + frac.toFixed(4) + '|' + (px ? px.x + ',' + px.y : '') + '|' + inDots;
       if (key !== st.uiKey) {
         st.uiKey = key;
@@ -415,6 +389,7 @@ export function ViewerChrome(props: Props): JSX.Element {
       const v = st.v;
       const roi = viewToRoi(v.s, v.tx, v.ty, { vw: W, vh: H }, p.iw, p.ih);
       p.gazeService.motion({ handle: p.handle, x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1, vw: Math.round(W), vh: Math.round(H), flags: 0 });
+      p.sink?.setView(roi.x0, roi.y0, roi.x1, roi.y1, Math.round(W), Math.round(H)); // evicts what we moved away from
     }
 
     function loop(): void {
@@ -543,7 +518,7 @@ export function ViewerChrome(props: Props): JSX.Element {
         st.v = { ...v, tty: v.tty - KEY_PAN_STEP_PX };
         dirty = true;
       } else if (k === 'l' || k === 'L') a.onToggleLoupe();
-      else if (k === 'p' || k === 'P') a.onToggleDots();
+      else if (k === 'p' || k === 'P') a.onDiveDots();
       else if (k === 'i' || k === 'I') a.onToggleInfo();
       else if (k === 't' || k === 'T') a.onToggleTelemetry();
       else if (k === '[') a.onPrev();
@@ -591,7 +566,7 @@ export function ViewerChrome(props: Props): JSX.Element {
   // New deliveries and renderer toggles must repaint even when the view is idle.
   useEffect(() => {
     wakeRef.current();
-  }, [props.paintTick, props.sink, props.loupe, props.dots, props.dotThreshold, props.maxZoom]);
+  }, [props.paintTick, props.sink, props.loupe, props.dotThreshold, props.maxZoom]);
 
   return (
     <canvas

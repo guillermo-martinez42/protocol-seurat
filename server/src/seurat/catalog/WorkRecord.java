@@ -17,8 +17,11 @@ public final class WorkRecord {
 
     public WorkRecord(WorkMeta meta) {
         this.meta = meta;
-        ceilings.put(ANONYMOUS, new long[]{1, 2});
-        ceilings.put(AUTHENTICATED, new long[]{0, 2});
+        // Every role reaches full detail when zoomed in (level 0, all 4 bands); the budget's
+        // band rate limit and lossy level 0 keep the whole image from ever leaving at master
+        // quality. PUT .../politica can still lower a work's ceiling per role.
+        ceilings.put(ANONYMOUS, new long[]{0, 4});
+        ceilings.put(AUTHENTICATED, new long[]{0, 4});
         ceilings.put(PRIVILEGED, new long[]{0, 4});
     }
 

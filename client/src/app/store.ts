@@ -30,7 +30,6 @@ export interface UiState {
   route: { name: 'gallery' } | { name: 'viewer'; id: string };
   filter: string;
   loupe: boolean;
-  dots: boolean;
   info: boolean;
   telemetry: boolean;
   menu: boolean;
@@ -40,7 +39,6 @@ const store = createStore<UiState>({
   route: { name: 'gallery' },
   filter: 'all',
   loupe: false,
-  dots: true,
   info: false,
   telemetry: false,
   menu: false,

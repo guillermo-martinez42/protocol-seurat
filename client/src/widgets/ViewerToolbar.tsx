@@ -19,7 +19,7 @@ interface Props {
   onFit(): void;
   onOneToOne(): void;
   onToggleLoupe(): void;
-  onToggleDots(): void;
+  onDiveDots(): void;
 }
 
 export function ViewerToolbar(p: Props): JSX.Element {
@@ -59,8 +59,8 @@ export function ViewerToolbar(p: Props): JSX.Element {
         <Icon name="search" size={24} />
       </button>
       <button
-        onClick={p.onToggleDots}
-        title="Pointillist pixels (P)"
+        onClick={p.onDiveDots}
+        title="Dive into the dots (P)"
         className={`visor-btn-spring ${styles.toolButton} ${dotsActive ? styles.activeToolButton : ''}`}
       >
         <Icon name="blur_on" size={24} />

@@ -1,106 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { drawPointillism, samplePixelHex, type PointillismBrush } from '../pointillism';
-
-function createMockScratchCanvas(pixels: Uint8ClampedArray, w: number, h: number): HTMLCanvasElement {
-  const mockCtx = {
-    imageSmoothingEnabled: true,
-    clearRect: () => {},
-    drawImage: () => {},
-    getImageData: () => ({ data: pixels, width: w, height: h }),
-  };
-  return {
-    width: w,
-    height: h,
-    getContext: () => mockCtx,
-  } as unknown as HTMLCanvasElement;
-}
+import { drawPointillism, dotsPerSide, patternOrigin, samplePixelHex, tileDots, type PointillismBrush } from '../pointillism';
+import { DOT_SPACING_PX, DOT_TILE_CELLS } from '@/shared/config/render';
 
 describe('pointillism widget', () => {
-  it('does nothing when brushes array is empty or zoom <= 0', () => {
-    let arcCount = 0;
-    const ctx = {
-      beginPath: () => {},
-      arc: () => { arcCount++; },
-      fill: () => {},
-      fillStyle: '',
-    } as unknown as CanvasRenderingContext2D;
-
-    const scratch = createMockScratchCanvas(new Uint8ClampedArray(16), 2, 2);
-
-    drawPointillism(ctx, {
-      tx: 0, ty: 0, s: 16, cx0: 0, cy0: 0, cx1: 100, cy1: 100,
-      iw: 100, ih: 100, f: 1, brushes: [], scratchCanvas: scratch,
-    });
-    expect(arcCount).toBe(0);
-
-    drawPointillism(ctx, {
-      tx: 0, ty: 0, s: 0, cx0: 0, cy0: 0, cx1: 100, cy1: 100,
-      iw: 100, ih: 100, f: 1,
-      brushes: [{ x: 0, y: 0, w: 100, h: 100, bmp: {} as ImageBitmap }],
-      scratchCanvas: scratch,
-    });
-    expect(arcCount).toBe(0);
+  it('does nothing without brushes or with zoom <= 0', () => {
+    let drawn = 0;
+    const ctx = { drawImage: () => { drawn++; } } as unknown as CanvasRenderingContext2D;
+    const scratch = {} as HTMLCanvasElement;
+    const view = { tx: 0, ty: 0, cx0: 0, cy0: 0, cx1: 100, cy1: 100, scratchCanvas: scratch };
+    drawPointillism(ctx, { ...view, s: 16, brushes: [] });
+    drawPointillism(ctx, { ...view, s: 0, brushes: [{ x: 0, y: 0, w: 100, h: 100, bmp: {} as ImageBitmap }] });
+    expect(drawn).toBe(0);
   });
 
-  it('draws circular dots for visible non-transparent pixels', () => {
-    const dots: Array<{ cx: number; cy: number; rad: number; color: string }> = [];
-    let currentColor = '';
-    const ctx = {
-      beginPath: () => {},
-      arc: (cx: number, cy: number, rad: number) => {
-        dots.push({ cx, cy, rad, color: currentColor });
-      },
-      fill: () => {},
-      set fillStyle(val: string) { currentColor = val; },
-    } as unknown as CanvasRenderingContext2D;
-
-    // 2x1 image with red and blue pixels
-    const pixels = new Uint8ClampedArray([
-      255, 0, 0, 255,   // red
-      0, 0, 255, 255,   // blue
-    ]);
-    const scratch = createMockScratchCanvas(pixels, 2, 1);
-
-    const brush: PointillismBrush = {
-      x: 0, y: 0, w: 2, h: 1,
-      bmp: {} as ImageBitmap,
-    };
-
-    drawPointillism(ctx, {
-      tx: 0, ty: 0, s: 16, cx0: 0, cy0: 0, cx1: 32, cy1: 16,
-      iw: 2, ih: 1, f: 1, brushes: [brush], scratchCanvas: scratch,
-    });
-
-    expect(dots.length).toBe(2);
-    expect(dots[0]?.color).toBe('rgb(255,0,0)');
-    expect(dots[1]?.color).toBe('rgb(0,0,255)');
-    expect(dots[0]?.rad).toBeGreaterThan(0);
-    expect(dots[1]?.rad).toBeGreaterThan(0);
+  it('always paints a pixel with several dots, about DOT_SPACING_PX apart', () => {
+    expect(dotsPerSide(12)).toBeGreaterThanOrEqual(2);
+    expect(dotsPerSide(0.5)).toBe(2);
+    expect(dotsPerSide(64)).toBe(Math.round(64 / DOT_SPACING_PX));
   });
 
-  it('skips pixels with 0 alpha (transparent)', () => {
-    let dotCount = 0;
-    const ctx = {
-      beginPath: () => {},
-      arc: () => { dotCount++; },
-      fill: () => {},
-      fillStyle: '',
-    } as unknown as CanvasRenderingContext2D;
-
-    const pixels = new Uint8ClampedArray([
-      0, 0, 0, 0,       // transparent
-      255, 255, 255, 0, // transparent
-    ]);
-    const scratch = createMockScratchCanvas(pixels, 2, 1);
-
-    drawPointillism(ctx, {
-      tx: 0, ty: 0, s: 16, cx0: 0, cy0: 0, cx1: 32, cy1: 16,
-      iw: 2, ih: 1, f: 1,
-      brushes: [{ x: 0, y: 0, w: 2, h: 1, bmp: {} as ImageBitmap }],
-      scratchCanvas: scratch,
+  it('keeps every dot inside its own cell, so no dot crosses a pixel edge', () => {
+    const dots = tileDots();
+    expect(dots).toHaveLength(DOT_TILE_CELLS * DOT_TILE_CELLS);
+    dots.forEach((d, k) => {
+      const i = k % DOT_TILE_CELLS;
+      const j = Math.floor(k / DOT_TILE_CELLS);
+      expect(d.r).toBeGreaterThan(0);
+      expect(d.x - d.r).toBeGreaterThan(i);
+      expect(d.x + d.r).toBeLessThan(i + 1);
+      expect(d.y - d.r).toBeGreaterThan(j);
+      expect(d.y + d.r).toBeLessThan(j + 1);
     });
+  });
 
-    expect(dotCount).toBe(0);
+  it('locks the dot grid to the pixel grid even at huge-image offsets', () => {
+    const s = 64;
+    const cell = s / dotsPerSide(s);
+    const period = DOT_TILE_CELLS * cell;
+    const tx = -11_264_003.25; // ~176k px wide image at 6400%
+    const o = patternOrigin(tx, period);
+    expect(o).toBeGreaterThanOrEqual(0);
+    expect(o).toBeLessThan(period);
+    for (const px of [0, 1, 175_999]) {
+      const cells = (tx + px * s - o) / cell;
+      expect(Math.abs(cells - Math.round(cells))).toBeLessThan(1e-6);
+    }
   });
 
   it('samplePixelHex samples the finest covering brush pixel in uppercase hex', () => {

@@ -28,7 +28,13 @@ public final class LoanBookTest {
         book.release(Ranges.of(1));
         TestKit.check(book.size() == 1 && book.contains(2) && !book.contains(1),
                 "release drops 1");
+        TestKit.check(book.bands(p) == 0, "[2,4) without [0,2) does not count: resend");
+        book.log(p, 0, 4, 1900, 2);
+        book.log(p, 0, 4, 1900, 2);
+        book.release(Ranges.of(3));
+        TestKit.check(book.bands(p) == 4, "dropping an old resend keeps the newer one");
         book.cancel(2);
+        book.cancel(4);
         TestKit.check(book.size() == 0 && book.bands(p) == 0, "cancel clears bands");
     }
 

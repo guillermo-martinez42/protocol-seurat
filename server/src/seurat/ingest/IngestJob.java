@@ -1,8 +1,10 @@
 package seurat.ingest;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
+import seurat.codec.Quant;
 import seurat.observe.AuditLog;
 import seurat.observe.Log;
 import seurat.proto.ProtoCodes;
@@ -93,6 +95,8 @@ public final class IngestJob implements Runnable {
             nx[stratum] = div256(padTo(w, top) >> stratum);
             ny[stratum] = div256(padTo(h, top) >> stratum);
         }
+        Files.createDirectories(dir);
+        Files.writeString(dir.resolve("quant"), Integer.toString(Quant.TABLE)); // FileBrushStore reads it
         return new FileBrushStore(dir,
                 new WorkMeta(id, name, w, h, 256, top + 1, 0, 2, 0, 2), nx, ny);
     }

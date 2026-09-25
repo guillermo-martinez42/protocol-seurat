@@ -28,10 +28,13 @@ public final class QuantPredictTest {
     }
 
     private static void table() {
-        TestKit.check(Quant.qy(0) == 6 && Quant.qc(0) == 0, "s0 4:2:0");
-        TestKit.check(Quant.qy(1) == 4 && Quant.qc(1) == 6, "s1");
-        TestKit.check(Quant.qy(2) == 2 && Quant.qc(2) == 3, "s2");
-        TestKit.check(Quant.qy(5) == 1 && Quant.qc(5) == 2, "s>=3");
+        TestKit.check(Quant.qy(1, 0) == 6 && Quant.qc(1, 0) == 0, "table 1 s0 4:2:0");
+        TestKit.check(Quant.qy(1, 1) == 4 && Quant.qc(1, 1) == 6, "table 1 s1");
+        TestKit.check(Quant.qy(1, 2) == 2 && Quant.qc(1, 2) == 3, "table 1 s2");
+        TestKit.check(Quant.qy(1, 5) == 1 && Quant.qc(1, 5) == 2, "table 1 s>=3");
+        TestKit.check(Quant.TABLE == 2 && Quant.qy(0) == 2 && Quant.qc(0) == 2,
+                "s0 near-lossless, full chroma");
+        TestKit.check(Quant.qy(1) == 1 && Quant.qc(1) == 1 && Quant.qc(9) == 1, "s>=1 lossless");
     }
 
     private static void prediction() {

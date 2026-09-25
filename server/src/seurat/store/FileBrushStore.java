@@ -22,11 +22,15 @@ public final class FileBrushStore implements BrushStore {
     private final WorkMeta meta;
     private final int[] nx;
     private final StoreWriter writer;
+    /** Quant table the bands were encoded with: the "quant" marker, 1 for stores older than it. */
+    public final int quantTable;
 
     public FileBrushStore(Path dir, WorkMeta meta, int[] nx, int[] ny) throws IOException {
         this.dir = dir;
         this.meta = meta;
         this.nx = nx.clone();
+        Path q = dir.resolve("quant");
+        quantTable = Files.exists(q) ? Integer.parseInt(Files.readString(q).trim()) : 1;
         Files.createDirectories(dir);
         StoreWriter.recover(dir, nx);
         writer = new StoreWriter(dir, nx);

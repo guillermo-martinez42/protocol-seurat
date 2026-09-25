@@ -1,12 +1,5 @@
 import { hash3 } from '@/shared/lib/hash3';
-import {
-  TAU,
-  DOT_GROWTH_BASE,
-  DOT_GROWTH_RANGE,
-  DOT_JITTER_MAX,
-  DOT_RADIUS_BASE,
-  DOT_RADIUS_VARIATION,
-} from '@/shared/config/render';
+import { TAU, DOT_SPACING_PX, DOT_TILE_CELLS } from '@/shared/config/render';
 
 export interface PointillismBrush {
   x: number;
@@ -24,71 +17,97 @@ export interface PointillismParams {
   cy0: number;
   cx1: number;
   cy1: number;
-  iw: number;
-  ih: number;
-  f: number;
   brushes: PointillismBrush[];
   scratchCanvas: HTMLCanvasElement;
 }
 
-export function drawPointillism(
-  ctx: CanvasRenderingContext2D,
-  params: PointillismParams,
-): void {
-  const { tx, ty, s, cx0, cy0, cx1, cy1, iw, ih, f, brushes, scratchCanvas } = params;
-  if (brushes.length === 0 || s <= 0) return;
+/** Dots per image-pixel side: ~DOT_SPACING_PX apart on screen, never fewer than 2, so a pixel is always several dots. */
+export function dotsPerSide(s: number): number {
+  return Math.max(2, Math.round(s / DOT_SPACING_PX));
+}
 
-  const x0 = Math.max(0, Math.floor((cx0 - tx) / s));
-  const y0 = Math.max(0, Math.floor((cy0 - ty) / s));
-  const x1 = Math.min(iw, Math.ceil((cx1 - tx) / s));
-  const y1 = Math.min(ih, Math.ceil((cy1 - ty) / s));
-  const sw = x1 - x0;
-  const sh = y1 - y0;
-  if (sw <= 0 || sh <= 0) return;
-
-  scratchCanvas.width = sw;
-  scratchCanvas.height = sh;
-  const sctx = scratchCanvas.getContext('2d', { willReadFrequently: true });
-  if (!sctx) return;
-  sctx.imageSmoothingEnabled = false;
-  sctx.clearRect(0, 0, sw, sh);
-
-  for (const b of brushes) {
-    if (b.x + b.w <= x0 || b.x >= x1 || b.y + b.h <= y0 || b.y >= y1) continue;
-    sctx.drawImage(b.bmp, b.x - x0, b.y - y0, b.w, b.h);
-  }
-
-  const imgData = sctx.getImageData(0, 0, sw, sh);
-  const data = imgData.data;
-  const grow = DOT_GROWTH_BASE + DOT_GROWTH_RANGE * f;
-
-  for (let gy = 0; gy < sh; gy++) {
-    const iy = y0 + gy;
-    const rowOffset = gy * sw * 4;
-    for (let gx = 0; gx < sw; gx++) {
-      const idx = rowOffset + gx * 4;
-      const a = data[idx + 3] ?? 0;
-      if (a === 0) continue;
-      const r = data[idx] ?? 0;
-      const g = data[idx + 1] ?? 0;
-      const b = data[idx + 2] ?? 0;
-      const ix = x0 + gx;
-
-      const [h1, h2, h3] = hash3(ix, iy);
-      let cx = tx + (ix + 0.5) * s;
-      let cy = ty + (iy + 0.5) * s;
-      cx += (h1 - 0.5) * s * DOT_JITTER_MAX;
-      cy += (h2 - 0.5) * s * DOT_JITTER_MAX;
-      const rad = s * (DOT_RADIUS_BASE + DOT_RADIUS_VARIATION * h3) * grow;
-
-      if (cx + rad < cx0 || cx - rad > cx1 || cy + rad < cy0 || cy - rad > cy1) continue;
-
-      ctx.fillStyle = `rgb(${r},${g},${b})`;
-      ctx.beginPath();
-      ctx.arc(cx, cy, rad, 0, TAU);
-      ctx.fill();
+/**
+ * One dot per cell of a DOT_TILE_CELLS² tile, in cell units. Jitter + radius stay under half a
+ * cell, so a dot never leaves its cell, and cells tile each pixel exactly: no dot crosses a pixel edge.
+ */
+export function tileDots(): Array<{ x: number; y: number; r: number }> {
+  const out: Array<{ x: number; y: number; r: number }> = [];
+  for (let j = 0; j < DOT_TILE_CELLS; j++) {
+    for (let i = 0; i < DOT_TILE_CELLS; i++) {
+      const [h1, h2, h3] = hash3(i, j);
+      const r = 0.3 + 0.1 * h3;
+      const room = 0.8 * (0.5 - r);
+      out.push({ x: i + 0.5 + (2 * h1 - 1) * room, y: j + 0.5 + (2 * h2 - 1) * room, r });
     }
   }
+  return out;
+}
+
+/** Tile origin near 0 that keeps the cell grid on the pixel grid (huge images pan to tx ≈ -1e7). */
+export function patternOrigin(t: number, period: number): number {
+  return t - Math.floor(t / period) * period;
+}
+
+const CELL_PX = 16;
+let tile: HTMLCanvasElement | null = null;
+
+function dotTile(): HTMLCanvasElement {
+  if (tile) return tile;
+  const c = document.createElement('canvas');
+  c.width = c.height = DOT_TILE_CELLS * CELL_PX;
+  const t = c.getContext('2d');
+  if (t) {
+    t.fillStyle = '#fff';
+    t.beginPath();
+    for (const d of tileDots()) {
+      t.moveTo((d.x + d.r) * CELL_PX, d.y * CELL_PX);
+      t.arc(d.x * CELL_PX, d.y * CELL_PX, d.r * CELL_PX, 0, TAU);
+    }
+    t.fill();
+  }
+  tile = c;
+  return c;
+}
+
+/**
+ * Paints the view as dots: every image pixel becomes dotsPerSide(s)² dots of its own colour.
+ * The pixels are drawn as exact blocks, then masked by a tiled dot pattern locked to the pixel
+ * grid (GPU work, constant per frame whatever the image size or zoom).
+ */
+export function drawPointillism(ctx: CanvasRenderingContext2D, params: PointillismParams): void {
+  const { tx, ty, s, cx0, cy0, cx1, cy1, brushes, scratchCanvas } = params;
+  if (brushes.length === 0 || s <= 0 || cx1 <= cx0 || cy1 <= cy0) return;
+  const k = ctx.getTransform().a;
+  const w = Math.ceil((cx1 - cx0) * k);
+  const h = Math.ceil((cy1 - cy0) * k);
+  if (scratchCanvas.width !== w || scratchCanvas.height !== h) {
+    scratchCanvas.width = w;
+    scratchCanvas.height = h;
+  }
+  const l = scratchCanvas.getContext('2d');
+  if (!l) return;
+  l.setTransform(1, 0, 0, 1, 0, 0);
+  l.globalCompositeOperation = 'source-over';
+  l.clearRect(0, 0, w, h);
+  l.setTransform(k, 0, 0, k, -cx0 * k, -cy0 * k);
+  l.imageSmoothingEnabled = false;
+  for (const b of brushes) {
+    const dx = tx + b.x * s;
+    const dy = ty + b.y * s;
+    if (dx + b.w * s < cx0 || dx > cx1 || dy + b.h * s < cy0 || dy > cy1) continue;
+    l.drawImage(b.bmp, dx, dy, b.w * s, b.h * s);
+  }
+  const pattern = l.createPattern(dotTile(), 'repeat');
+  if (!pattern) return;
+  const cell = s / dotsPerSide(s);
+  const period = DOT_TILE_CELLS * cell;
+  pattern.setTransform(new DOMMatrix([cell / CELL_PX, 0, 0, cell / CELL_PX,
+    patternOrigin(tx, period), patternOrigin(ty, period)]));
+  l.imageSmoothingEnabled = true;
+  l.globalCompositeOperation = 'destination-in';
+  l.fillStyle = pattern;
+  l.fillRect(cx0, cy0, cx1 - cx0, cy1 - cy0);
+  ctx.drawImage(scratchCanvas, cx0, cy0, cx1 - cx0, cy1 - cy0);
 }
 
 export function samplePixelHex(

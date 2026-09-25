@@ -56,7 +56,7 @@ Tres caminos disjuntos:
   - La imagen se transforma a YCoCg-R y se descompone con una Haar entera (transformada S) en estratos.
   - Cada estrato solo guarda lo que le falta al anterior, así que el almacén es **no redundante en coeficientes**: N coeficientes para N píxeles, frente a los 4N/3 de una pirámide de copias. En bytes no lo es (§2.4).
   - Los detalles se cuantizan y se agrupan en **pinceladas** de 256 × 256 puntos, con sus bandas ordenadas por significancia.
-  - El estrato 0 del almacén es **con pérdida**: luminancia con paso 6 y croma sin refinar, equivalente a 4:2:0. Los bytes del máster nunca están en el almacén ni salen del servidor.
+  - El estrato 0 del almacén es **casi sin pérdida**: paso 2 en luminancia y croma, cada punto a ≤ 4 niveles del máster (idéntico a la vista al acercarse); los estratos superiores van sin pérdida. Los bytes del máster nunca están en el almacén ni salen del servidor.
 - **Qué se materializa y cuándo**: todo, en la única pasada de ingesta. No hay derivación perezosa ni hilos de derivación en el servidor:
   - en el modelo aditivo cada estrato es dato primario (sus detalles solo se pueden calcular con los valores exactos, que solo existen durante la ingesta);
   - la "derivación" a un zoom arbitrario ocurre en el cliente (§2.2).
@@ -68,19 +68,21 @@ Imagen de ejemplo usada en todo el documento: `slide-0421`, 196 608 × 163 840 p
 
 | Estrato | Puntos | Pinceladas | Bytes en almacén (peor caso) | Papel |
 |---|---|---|---|---|
-| 0 | 196608 × 163840 | 768 × 640 = 491 520 | ≈ 8,23 GB | fino · con pérdida (qY 6, croma sin refinar) |
-| 1 | 98304 × 81920 | 384 × 320 = 122 880 | ≈ 4,35 GB | fino · qY 4, qC 6 |
-| 2 | 49152 × 40960 | 192 × 160 = 30 720 | ≈ 2,07 GB | intermedio · qY 2, qC 3 |
-| 3 | 24576 × 20480 | 96 × 80 = 7 680 | ≈ 494 MB | casi sin pérdida · qY 1, qC 2 |
-| 4 | 12288 × 10240 | 48 × 40 = 1 920 | ≈ 112 MB | casi sin pérdida |
-| 5 | 6144 × 5120 | 24 × 20 = 480 | ≈ 28 MB | casi sin pérdida |
-| 6 | 3072 × 2560 | 12 × 10 = 120 | ≈ 7,0 MB | casi sin pérdida |
+| 0 | 196608 × 163840 | 768 × 640 = 491 520 | ≈ 8,23 GB | fino · casi sin pérdida (qY 2, qC 2) |
+| 1 | 98304 × 81920 | 384 × 320 = 122 880 | ≈ 4,35 GB | fino · sin pérdida |
+| 2 | 49152 × 40960 | 192 × 160 = 30 720 | ≈ 2,07 GB | intermedio · sin pérdida |
+| 3 | 24576 × 20480 | 96 × 80 = 7 680 | ≈ 494 MB | sin pérdida · qY 1, qC 1 |
+| 4 | 12288 × 10240 | 48 × 40 = 1 920 | ≈ 112 MB | sin pérdida |
+| 5 | 6144 × 5120 | 24 × 20 = 480 | ≈ 28 MB | sin pérdida |
+| 6 | 3072 × 2560 | 12 × 10 = 120 | ≈ 7,0 MB | sin pérdida |
 | 7 | 1536 × 1280 | 6 × 5 = 30 | ≈ 1,75 MB | boceto |
 | 8 | 768 × 640 | 3 × 3 = 9 | ≈ 0,44 MB | boceto |
 | 9 | 384 × 320 | 2 × 2 = 4 | ≈ 0,11 MB | boceto |
 | 10 (semilla) | 192 × 160 | 1 | ≈ 16 KB (medido en la muestra) | boceto · sin pérdida |
 
 Total: 655 363 pinceladas + semilla ≈ **15,3 GB** para todos los estratos. Boceto ≈ **2,3 MB** en el peor caso.
+
+Los bytes de esta tabla son los de la tabla de cuantización 1. Con la tabla 2 (§2.1) el almacén crece ≈ 2,3× en el peor caso medido (números hechos de píxeles), a cambio de ver cada punto exacto a la vista al acercarse.
 
 ---
 
@@ -147,13 +149,21 @@ i = sign(x) · ⌊|x| / q⌋            x̂ = 0 si i = 0;  si no, sign(i) · (|i
 
 | Estrato | qY | qC (Co, Cg) | Motivo |
 |---|---|---|---|
-| 0 | 6 | ∞ (croma no se refina) | Es el estrato más caro. El ojo tolera croma a mitad de resolución (≈ 4:2:0). |
-| 1 | 4 | 6 | Se muestra y además es padre del estrato 0. |
-| 2 | 2 | 3 | Padre de padres. |
-| ≥ 3 | 1 | 2 | Casi sin pérdida: su error se hereda en todos sus descendientes. |
+| 0 | 2 | 2 | Es el estrato más caro. Paso 2 con croma completa (4:4:4): cada punto queda a ≤ 4 niveles del máster (≈ 52 dB), así que al acercarse se ven los píxeles exactos a la vista, pero el máster no sale del servidor. |
+| ≥ 1 | 1 | 1 | Sin pérdida: su error se heredaría en todos sus descendientes. |
 | semilla | 1 | 1 | Sin pérdida. |
 
-Por qué los estratos gruesos van casi sin pérdida:
+Esta es la **tabla 2**. Cada almacén guarda en el archivo `quant` el número de tabla con que se codificó, y el servidor pone en cada pincelada los `qY`/`qC` de esa tabla. Los almacenes anteriores (sin archivo `quant`) usan la **tabla 1** — (6, ∞) · (4, 6) · (2, 3) · (1, 2) — y se siguen decodificando bien; para llevarlos a la tabla 2 hay que reingerir su máster.
+
+Medido en un recorte de 2048 × 2048 de la obra `000-500-000-950032` (números hechos de píxeles de colores), decodificando igual que el cliente:
+
+| Tabla | PSNR s0 | Error máximo | Puntos exactos | Bytes del almacén |
+|---|---|---|---|---|
+| 1 (anterior) | 31,5 dB | 58 niveles | 8,6 % | 3,4 MB |
+| **2 (elegida)** | **51,6 dB** | **4 niveles** | 51 % | 7,7 MB |
+| sin pérdida total | exacto | 0 | 100 % | 8,6 MB |
+
+Por qué los estratos gruesos van sin pérdida:
 
 - La transformada S es una pirámide de **medias**, y el detalle de un hijo describe diferencias dentro del bloque 2 × 2, no su media.
 - Por tanto un error en un padre llega intacto a todos sus descendientes: los detalles finos no pueden corregirlo, ni en lazo cerrado.
@@ -291,7 +301,7 @@ Tablas de cuantización alternativas, medidas sobre el mismo mosaico:
 
 | Tabla | s0 · s1 · s2 · s≥3 | PSNR s0 | Bytes totales |
 |---|---|---|---|
-| **A (elegida)** | (6,∞) · (4,6) · (2,3) · (1,2) | **38,26 dB** | 7 777 KiB |
+| A (tabla 1, anterior) | (6,∞) · (4,6) · (2,3) · (1,2) | **38,26 dB** | 7 777 KiB |
 | A2 | (6,∞) · (4,6) · (3,4) · (1,2) | 38,01 dB | −15 % en s2 |
 | B | (6,∞) · (4,6) · (3,4) · (2,3) | 36,27 dB | 7 586 KiB (−2,5 %) |
 | C | (6,∞) · (4,6) · (3,5) · (3,5) | 35,10 dB | 7 465 KiB (−4,0 %) |
@@ -305,7 +315,7 @@ Tablas de cuantización alternativas, medidas sobre el mismo mosaico:
 
 **Dónde pierde, y no se oculta**:
 
-- **La primera vista es cara en el peor caso.** El foco necesita su esqueleto de ancestros completos, y los estratos gruesos cuestan 7–8 bits/punto (van casi sin pérdida, por lo dicho en §2.1).
+- **La primera vista es cara en el peor caso.** El foco necesita su esqueleto de ancestros completos, y los estratos gruesos cuestan 7–8 bits/punto (van sin pérdida, por lo dicho en §2.1).
 
   | Vista de §3.4.2 (peor caso) | Seurat | Pirámide WebP q85 (21,1 kB/tesela medido) |
   |---|---|---|
@@ -1208,7 +1218,7 @@ cobertura/<principal>/slide-0421.bits      presupuesto (§9): 4 bits por pincela
 
 ### 9.1 Por qué es exigible por construcción
 
-1. **El máster no está en el almacén.** El estrato 0 es con pérdida (qY 6, croma sin refinar). Un cliente con todas las pinceladas de todos los estratos tiene ≈ 38 dB y color 4:2:0, no los bytes del máster.
+1. **El máster no está en el almacén.** El estrato 0 va con paso 2 (tabla 2). Un cliente con todas las pinceladas de todos los estratos tiene ≈ 52 dB: idéntico a la vista, pero la mitad de los puntos difieren del máster en 1–4 niveles, así que no tiene los bytes del máster.
 2. **Los techos por rol son máscaras anidadas.** El orden de los padres en las bandas es fijo por pincelada e igual para todos. La unión de lo que obtienen varios roles nunca supera al rol más alto: coludir una cuenta anónima con una autenticada no añade nada sobre el techo autenticado.
 3. **Salida única.** El único código que escribe puntos en la red es el Pintor, que comprueba concesión, libro y presupuesto antes de cada flujo.
 4. **No existe "dame X".** El cliente nunca nombra una pincelada. Los planes se derivan de `MIRADA` y se recortan con la concesión: pedir fuera del cono es imposible, no solo prohibido.

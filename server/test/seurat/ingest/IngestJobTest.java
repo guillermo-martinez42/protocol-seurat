@@ -41,7 +41,9 @@ public final class IngestJobTest {
             total += band.length;
         }
         TestKit.check(total > 0, "non-empty brush bytes");
-        TestKit.check(Quant.qy(0) == 6 && Quant.qc(0) == 0, "s0 table");
+        TestKit.check(store.quantTable == Quant.TABLE, "store records the table it was encoded with");
+        TestKit.check(new FileBrushStore(root.resolve("legacy"), work.meta, new int[]{1}, new int[]{1})
+                .quantTable == 1, "a store without the marker predates table 2");
         errorMarksFailed(root, works, catalog);
         System.out.println("IngestJobTest OK");
     }
