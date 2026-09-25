@@ -20,6 +20,8 @@ import seurat.config.SeuratConfig;
 import seurat.ingest.IngestJob;
 import seurat.kit.TestKit;
 import seurat.net.http.HttpSurface;
+import seurat.net.ws.WsFraming;
+import seurat.net.ws.WsMapping;
 import seurat.observe.Metrics;
 import seurat.paint.Painter;
 import seurat.proto.Frame;

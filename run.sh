@@ -17,5 +17,5 @@ if java -version 2>&1 | grep -q 'version "20\.'; then
   RUN_FLAGS=(--enable-preview)
 fi
 
-javac "${FLAGS[@]}" -d .seurat/build/classes $(find src/main/java -name '*.java')
+javac "${FLAGS[@]}" -d .seurat/build/classes $(find server/src -name '*.java')
 exec java "${RUN_FLAGS[@]}" -Xmx2G -cp .seurat/build/classes seurat.SeuratServer "$@"

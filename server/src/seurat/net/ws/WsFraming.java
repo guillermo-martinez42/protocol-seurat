@@ -1,4 +1,4 @@
-package seurat.net;
+package seurat.net.ws;
 
 import java.io.EOFException;
 import java.io.IOException;

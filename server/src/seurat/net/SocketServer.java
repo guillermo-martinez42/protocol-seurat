@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import seurat.net.http.HttpSurface;
+import seurat.net.ws.WsMapping;
 import seurat.observe.Log;
 
 /**

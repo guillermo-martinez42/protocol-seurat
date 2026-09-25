@@ -33,7 +33,7 @@ if ((Test-Path "client/package.json") -and (Get-Command npm -ErrorAction Silentl
 }
 
 Write-Host "Compiling Java backend..."
-$sources = Get-ChildItem -Path "src/main/java" -Recurse -Filter *.java | ForEach-Object { $_.FullName }
+$sources = Get-ChildItem -Path "server/src" -Recurse -Filter *.java | ForEach-Object { $_.FullName }
 javac @compileFlags -d .seurat/build/classes $sources
 
 Write-Host "Starting Seurat/1 Server..."

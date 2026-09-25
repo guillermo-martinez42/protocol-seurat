@@ -1,7 +1,8 @@
-package seurat.net;
+package seurat.net.wt;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import seurat.net.Mapping;
 import seurat.session.Delivery;
 import seurat.session.Canvas;
 

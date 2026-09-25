@@ -17,8 +17,8 @@ An asynchronous, server-authoritative protocol and viewer for streaming gigapixe
 
 ```
 .
-├── src/main/java/seurat/        # Java 21 backend (single-responsibility modules <150 LoC)
-├── src/test/java/seurat/        # Backend test suite (wire goldens and invariant tests <300 LoC)
+├── server/src/seurat/          # Java 21 backend (single-responsibility modules <150 LoC)
+├── server/test/seurat/         # Backend test suite (wire goldens and invariant tests <300 LoC)
 ├── client/                      # Modern React + TypeScript viewer (Feature-Sliced Design)
 │   ├── src/                     # FSD layers (app, pages, widgets, features, entities, shared)
 │   └── dist/                    # Compiled static production bundle

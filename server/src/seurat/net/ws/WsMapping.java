@@ -1,4 +1,4 @@
-package seurat.net;
+package seurat.net.ws;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.net.Socket;
 import java.util.Arrays;
 import java.util.concurrent.BlockingQueue;
+import seurat.net.Mapping;
 import seurat.proto.Frame;
 import seurat.proto.FrameType;
 import seurat.session.Canvas;
