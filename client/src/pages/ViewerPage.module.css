@@ -1,0 +1,38 @@
+.container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  background: var(--surface-ambient, #0D0E13);
+  color: var(--text-contrast, #E3E1E9);
+  font-family: 'Roboto Flex', system-ui, sans-serif;
+  user-select: none;
+}
+
+.pointillistBanner {
+  position: absolute;
+  top: 92px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 16px 0 12px;
+  border-radius: 18px;
+  background: var(--brand-secondary, #FF8A5B);
+  color: #380D00;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.loadingNotice {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 60px);
+  transform: translateX(-50%);
+  font-size: 14px;
+  color: var(--text-muted, #C5C6D0);
+  white-space: nowrap;
+}

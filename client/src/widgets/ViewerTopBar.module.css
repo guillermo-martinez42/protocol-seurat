@@ -1,0 +1,88 @@
+.topBar {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.titlePill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 24px 6px 6px;
+  border-radius: 32px;
+}
+
+.backBtn {
+  width: 48px;
+  height: 48px;
+  background: var(--surface-control-active, #34343A);
+}
+
+.titleBox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.titleText {
+  font-size: 17px;
+  font-weight: 650;
+  font-variation-settings: 'wdth' 112;
+}
+
+.subText {
+  font-size: 12px;
+  color: var(--text-muted, #C5C6D0);
+  font-variant-numeric: tabular-nums;
+}
+
+.navPill {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 32px;
+}
+
+.navBtn {
+  width: 48px;
+  height: 48px;
+}
+
+.counter {
+  min-width: 56px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted, #C5C6D0);
+  font-variant-numeric: tabular-nums;
+}
+
+.divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-line, #45464F);
+  margin: 0 6px;
+}
+
+.infoBtn {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--text-contrast, #E3E1E9);
+}
+
+.infoBtnActive {
+  border-radius: 16px;
+  background: var(--badge-bg, #B8C4FF);
+  color: var(--badge-text, #1F2D6F);
+}
