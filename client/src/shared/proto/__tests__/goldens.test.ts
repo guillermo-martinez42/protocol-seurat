@@ -62,9 +62,16 @@ describe('varint (QUIC minimal encode)', () => {
 });
 
 describe('ranges (SACK)', () => {
-  it('mayor 0 = empty', () => {
-    const r = rangesDecode(Uint8Array.from([0x00]), 0);
+  it('mayor 0 = empty, still 3 varints (00 00 00, as the server)', () => {
+    expect(hex(rangesEncode([]))).toBe('000000');
+    const r = rangesDecode(Uint8Array.from([0x00, 0x00, 0x00]), 0);
     expect(r.values).toEqual([]);
+    expect(r.next).toBe(3);
+  });
+  it('RECIBO with nothing new = 01 000000 28 42c4 00 (Java MsgLoans.Receipt bytes)', () => {
+    const r = { handle: 1, completed: [], queueMs: 40, libre: 708, renewThrough: 0 };
+    expect(hex(receiptCore(r))).toBe('010000002842c400');
+    expect(receiptDecode(receiptCore(r))).toEqual(r);
   });
   it('RECIBO [45,51]+[53,60] = 3c 01 07 00 06', () => {
     const enc = rangesEncode([...rangeList(45, 51), ...rangeList(53, 60)]);

@@ -20,11 +20,15 @@ public final class BandsTest {
     }
 
     private static void ordering() {
-        int n = 256;
+        ordering(256);
+        ordering(Bands.PARENTS);
+    }
+
+    private static void ordering(int n) {
         int[] energy = new int[n];
         java.util.Random rnd = new java.util.Random(3);
         for (int i = 0; i < n; i++) {
-            energy[i] = rnd.nextInt(50);
+            energy[i] = rnd.nextInt(100) - 50;
         }
         int[] rank = Bands.order(energy, n);
         int[] byRank = new int[n];

@@ -44,42 +44,43 @@ final class ImagePass {
             acc[stratum] = new Accumulator(paddedW >> stratum);
         }
         List<short[][]> seed = new ArrayList<>();
-        ExecutorService pool = Executors.newFixedThreadPool(
-                Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
-        List<Future<?>> tasks = new ArrayList<>();
-        int[] drainCounts = new int[top];
-        int[][] yuv = new int[3][paddedW];
-        int row = 0;
-        int[][] band;
-        while ((band = reader.next()) != null) {
-            for (int[] rgbRow : band) {
-                YCoCgR.forwardRow(rgbRow, 0, yuv[0], yuv[1], yuv[2], 0, width);
-                for (int c = 0; c < 3; c++) {
-                    for (int x = width; x < paddedW; x++) {
-                        yuv[c][x] = yuv[c][width - 1];
+        // close() waits for queued brushes: a failed pass leaves no threads or writers behind.
+        try (ExecutorService pool = Executors.newFixedThreadPool(
+                Math.max(1, Runtime.getRuntime().availableProcessors() - 1))) {
+            List<Future<?>> tasks = new ArrayList<>();
+            int[] drainCounts = new int[top];
+            int[][] yuv = new int[3][paddedW];
+            int row = 0;
+            int[][] band;
+            while ((band = reader.next()) != null) {
+                for (int[] rgbRow : band) {
+                    YCoCgR.forwardRow(rgbRow, 0, yuv[0], yuv[1], yuv[2], 0, width);
+                    for (int c = 0; c < 3; c++) {
+                        for (int x = width; x < paddedW; x++) {
+                            yuv[c][x] = yuv[c][width - 1];
+                        }
                     }
+                    row = feed(acc, yuv, paddedW, row, pool, tasks, seed, drainCounts);
                 }
-                row = feed(acc, yuv, paddedW, row, pool, tasks, seed, drainCounts);
+                catalog.progress(id, (int) (reader.fraction() * 100));
             }
-            catalog.progress(id, (int) (reader.fraction() * 100));
-        }
-        while (row < paddedH) {
-            acc[0].addRow(row % 256, yuv[0], yuv[1], yuv[2], paddedW);
-            row++;
-            if (acc[0].full()) {
-                new Drain(0, top, acc, store, pool, tasks, seed, drainCounts).drain();
+            while (row < paddedH) {
+                acc[0].addRow(row % 256, yuv[0], yuv[1], yuv[2], paddedW);
+                row++;
+                if (acc[0].full()) {
+                    new Drain(0, top, acc, store, pool, tasks, seed, drainCounts).drain();
+                }
+            }
+            for (int stratum = 0; stratum < top; stratum++) {
+                replicate(acc[stratum]);
+                if (acc[stratum].rows > 0) {
+                    new Drain(stratum, top, acc, store, pool, tasks, seed, drainCounts).drain();
+                }
+            }
+            for (Future<?> task : tasks) {
+                task.get();
             }
         }
-        for (int stratum = 0; stratum < top; stratum++) {
-            replicate(acc[stratum]);
-            if (acc[stratum].rows > 0) {
-                new Drain(stratum, top, acc, store, pool, tasks, seed, drainCounts).drain();
-            }
-        }
-        for (Future<?> task : tasks) {
-            task.get();
-        }
-        pool.shutdown();
         writeSeed(seed, paddedW >> top, paddedH >> top);
     }
 

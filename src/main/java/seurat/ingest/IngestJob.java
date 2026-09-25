@@ -1,7 +1,5 @@
 package seurat.ingest;
 
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
@@ -13,7 +11,8 @@ import seurat.store.WorkMeta;
 
 /**
  * Single sequential pass: 256-row bands, per-stratum int16 accumulators,
- * pool of N-1 for brush encode. ed1 sketch first, ed2 at close + fsync.
+ * pool of N-1 for brush encode. ed2 at close + fsync. No ed1 sketch: PNG
+ * carries no overview (spec 7.1 step 3), so the work opens once LISTA.
  */
 public final class IngestJob implements Runnable {
     private final String id;
@@ -52,18 +51,8 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' dimensions: " + w + "x" + h + ", strata=" + (top + 1));
                 WorkRecord work = catalog.get(id);
                 work.meta = new WorkMeta(id, name, w, h, 256, top + 1,
-                        ProtoCodes.ST_RECIBIENDO, 1, 0, 2);
-                FileBrushStore ed1 = store(top, w, h, 1);
-                SketchBuilder.build(master, ed1, top);
-                ed1.close();
-                Path seed = ed1.dir().resolve("semilla.bin");
-                if (!Files.isRegularFile(seed)
-                        || Files.size(seed) <= 4) {
-                    throw new IOException("sketch seed was not written");
-                }
-                catalog.sketch(id, ed1, ProtoCodes.ST_BOCETO, 1);
-                Log.info("ingest", "Work '" + id + "' ed1 sketch generated (ST_BOCETO)");
-                FileBrushStore ed2 = store(top, w, h, 2);
+                        ProtoCodes.ST_PINTANDO, 1, 0, 2);
+                FileBrushStore ed2 = store(top, w, h);
                 new ImagePass(id, catalog, ed2, top, w, h, worksDir).run(reader);
                 ed2.close();
                 catalog.sketch(id, ed2, ProtoCodes.ST_LISTA, 2);
@@ -71,7 +60,7 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' ed2 pyramid completed, work ready (ST_LISTA)");
             }
             onReady.run();
-        } catch (Exception ex) {
+        } catch (Throwable ex) { // OutOfMemoryError included: never leave a work stuck mid-pass
             Log.error("ingest", "Ingest failed for '" + id + "': " + ex.getMessage(), ex);
             AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
             WorkRecord work = catalog.get(id);
@@ -94,8 +83,8 @@ public final class IngestJob implements Runnable {
         return ((v + (1 << top) - 1) >> top) << top;
     }
 
-    private FileBrushStore store(int top, int w, int h, int edition) throws Exception {
-        Path dir = worksDir.resolve(edition == 1 ? id + "/ed1" : id);
+    private FileBrushStore store(int top, int w, int h) throws Exception {
+        Path dir = worksDir.resolve(id);
         int levels = top + 1;
         int[] nx = new int[levels];
         int[] ny = new int[levels];
@@ -104,7 +93,7 @@ public final class IngestJob implements Runnable {
             ny[stratum] = div256(padTo(h, top) >> stratum);
         }
         return new FileBrushStore(dir,
-                new WorkMeta(id, name, w, h, 256, top + 1, 0, edition, 0, 2), nx, ny);
+                new WorkMeta(id, name, w, h, 256, top + 1, 0, 2, 0, 2), nx, ny);
     }
 
     public static int div256(int v) {

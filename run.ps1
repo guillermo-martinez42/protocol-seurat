@@ -37,4 +37,5 @@ $sources = Get-ChildItem -Path "src/main/java" -Recurse -Filter *.java | ForEach
 javac @compileFlags -d .seurat/build/classes $sources
 
 Write-Host "Starting Seurat/1 Server..."
-java @runFlags -Xmx2G -cp .seurat/build/classes seurat.SeuratServer @args
+# Ingest heap grows with image width (~2.5 GB live at 196,608 px); 6G leaves GC headroom.
+java @runFlags -Xmx6G -cp .seurat/build/classes seurat.SeuratServer @args

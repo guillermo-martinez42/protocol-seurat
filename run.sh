@@ -18,4 +18,5 @@ if java -version 2>&1 | grep -q 'version "20\.'; then
 fi
 
 javac "${FLAGS[@]}" -d .seurat/build/classes $(find src/main/java -name '*.java')
-exec java "${RUN_FLAGS[@]}" -Xmx2G -cp .seurat/build/classes seurat.SeuratServer "$@"
+# Ingest heap grows with image width (~2.5 GB live at 196,608 px); 6G leaves GC headroom.
+exec java "${RUN_FLAGS[@]}" -Xmx6G -cp .seurat/build/classes seurat.SeuratServer "$@"
