@@ -31,8 +31,8 @@ public final class PngReader implements MasterReader {
     private byte[] prevRow;
     private int row;
 
-    public PngReader(Path ruta) throws IOException {
-        StreamHeader hdr = tryStream(ruta);
+    public PngReader(Path source) throws IOException {
+        StreamHeader hdr = tryStream(source);
         if (hdr != null) {
             this.streaming = true;
             this.width = hdr.w;
@@ -51,9 +51,9 @@ public final class PngReader implements MasterReader {
             this.scanlines = null;
             this.bpp = 0;
             this.colorType = 0;
-            this.fallbackInput = ImageIO.createImageInputStream(ruta.toFile());
+            this.fallbackInput = ImageIO.createImageInputStream(source.toFile());
             Iterator<ImageReader> it = ImageIO.getImageReaders(fallbackInput);
-            if (!it.hasNext()) throw new IOException("unsupported format: " + ruta);
+            if (!it.hasNext()) throw new IOException("unsupported format: " + source);
             this.fallbackReader = it.next();
             this.fallbackReader.setInput(fallbackInput);
             this.width = fallbackReader.getWidth(0);
@@ -63,9 +63,9 @@ public final class PngReader implements MasterReader {
 
     private record StreamHeader(int w, int h, int bp, int ct, InputStream is, DataInputStream sl) {}
 
-    private static StreamHeader tryStream(Path ruta) {
+    private static StreamHeader tryStream(Path source) {
         try {
-            InputStream is = new BufferedInputStream(Files.newInputStream(ruta), 65536);
+            InputStream is = new BufferedInputStream(Files.newInputStream(source), 65536);
             DataInputStream dis = new DataInputStream(is);
             byte[] sig = new byte[8];
             dis.readFully(sig);

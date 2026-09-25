@@ -2,6 +2,7 @@ package seurat.ingest;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
@@ -22,60 +23,38 @@ final class SketchBuilder {
     private SketchBuilder() {}
 
     static void build(Path master, FileBrushStore store, int top) throws Exception {
-        try (ImageInputStream in = ImageIO.createImageInputStream(master.toFile())) {
-            Iterator<ImageReader> it = ImageIO.getImageReaders(in);
-            if (!it.hasNext()) {
-                return;
-            }
-            ImageReader reader = it.next();
-            reader.setInput(in);
-            int q = 1 << Math.max(0, top - 3);
-            var param = reader.getDefaultReadParam();
-            param.setSourceSubsampling(q, q, 0, 0);
-            BufferedImage img;
-            try {
-                img = reader.read(0, param);
-            } catch (Exception ex) {
-                reader.dispose();
-                throw new IOException("sketch decode failed", ex);
-            }
-            int sw = img.getWidth();
-            int sh = img.getHeight();
-            int[][] e = new int[3][sw * sh];
-            int[] rgb = new int[sw];
-            for (int y = 0; y < sh; y++) {
-                img.getRGB(0, y, sw, 1, rgb, 0, sw);
-                for (int c = 0; c < 3; c++) {
-                    for (int x = 0; x < sw; x++) {
-                        int p = rgb[x];
-                        int[] v = YCoCgR.forward((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
-                        e[c][y * sw + x] = v[c];
-                    }
-                }
-            }
-            reader.dispose();
-            int stratum = Math.max(0, top - 3);
-            while (stratum < top) {
-                if (sw % 2 != 0) {
-                    e = padWidth(e, sw, sh, sw + 1);
-                    sw++;
-                }
-                if (sh % 2 != 0) {
-                    e = padHeight(e, sw, sh);
-                    sh++;
-                }
-                int[][] sig = means(e, sw, sh);
-                if (stratum >= top - 3) {
-                    paintLevel(sig, sw / 2, sh / 2, stratum, store);
-                }
-                e = sig;
-                sw /= 2;
-                sh /= 2;
-                stratum++;
-            }
-            java.nio.file.Files.write(store.dir().resolve("semilla.bin"),
-                    SeedCodec.encode(e, sw, sh));
+        int q = 1 << Math.max(0, top - 3);
+        PngSubsampler.Subsampled sub = PngSubsampler.subsample(master, q);
+        if (sub == null) {
+            sub = fallback(master, q);
         }
+        if (sub == null) {
+            return;
+        }
+        int sw = sub.sw();
+        int sh = sub.sh();
+        int[][] e = sub.e();
+        int stratum = Math.max(0, top - 3);
+        while (stratum < top) {
+            if (sw % 2 != 0) {
+                e = padWidth(e, sw, sh, sw + 1);
+                sw++;
+            }
+            if (sh % 2 != 0) {
+                e = padHeight(e, sw, sh);
+                sh++;
+            }
+            int[][] sig = means(e, sw, sh);
+            if (stratum >= top - 3) {
+                paintLevel(sig, sw / 2, sh / 2, stratum, store);
+            }
+            e = sig;
+            sw /= 2;
+            sh /= 2;
+            stratum++;
+        }
+        Files.write(store.dir().resolve("semilla.bin"),
+                SeedCodec.encode(e, sw, sh));
     }
 
     private static int[][] means(int[][] e, int w, int h) {
@@ -132,4 +111,36 @@ final class SketchBuilder {
         return out;
     }
 
+    private static PngSubsampler.Subsampled fallback(Path master, int q) throws IOException {
+        try (ImageInputStream in = ImageIO.createImageInputStream(master.toFile())) {
+            Iterator<ImageReader> it = ImageIO.getImageReaders(in);
+            if (!it.hasNext()) return null;
+            ImageReader reader = it.next();
+            reader.setInput(in);
+            var param = reader.getDefaultReadParam();
+            param.setSourceSubsampling(q, q, 0, 0);
+            BufferedImage img;
+            try {
+                img = reader.read(0, param);
+            } catch (Exception ex) {
+                reader.dispose();
+                throw new IOException("sketch decode failed", ex);
+            }
+            int sw = img.getWidth(), sh = img.getHeight();
+            int[][] e = new int[3][sw * sh];
+            int[] rgb = new int[sw];
+            for (int y = 0; y < sh; y++) {
+                img.getRGB(0, y, sw, 1, rgb, 0, sw);
+                for (int c = 0; c < 3; c++) {
+                    for (int x = 0; x < sw; x++) {
+                        int p = rgb[x];
+                        int[] v = YCoCgR.forward((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
+                        e[c][y * sw + x] = v[c];
+                    }
+                }
+            }
+            reader.dispose();
+            return new PngSubsampler.Subsampled(e, sw, sh);
+        }
+    }
 }
