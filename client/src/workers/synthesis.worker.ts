@@ -43,7 +43,7 @@ function ycocgInv(y: number, co: number, cg: number): [number, number, number] {
   return [b + co, g, b];
 }
 
-function loadParentPlanes(req: SynthRequest, planes: Record<'Y' | 'Co' | 'Cg', Int16Array>): void {
+function loadParentPlanes(req: SynthRequest, parentPlanes: Record<'Y' | 'Co' | 'Cg', Int16Array>): void {
   if (!req.parentPlanes) return;
   const width = req.parentPlaneWidth ?? 256;
   const height = req.parentPlaneHeight ?? 256;
@@ -54,7 +54,7 @@ function loadParentPlanes(req: SynthRequest, planes: Record<'Y' | 'Co' | 'Cg', I
     const name = names[c];
     if (!name) continue;
     const source = new Int16Array(req.parentPlanes[c] ?? new ArrayBuffer(0));
-    const target = planes[name];
+    const target = parentPlanes[name];
     for (let y = 0; y < 128; y++) {
       for (let x = 0; x < 128; x++) {
         const sx = Math.min(width - 1, x0 + x);
@@ -126,7 +126,12 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
         }
       }
     } else {
-      loadParentPlanes(req, planes);
+      const parentPlanes: Record<'Y' | 'Co' | 'Cg', Int16Array> = {
+        Y: new Int16Array(16384),
+        Co: new Int16Array(16384),
+        Cg: new Int16Array(16384),
+      };
+      loadParentPlanes(req, parentPlanes);
       const n = 16384;
       const nch = req.qC > 0 ? 3 : 1;
       const chNames = ['Y', 'Co', 'Cg'] as const;
@@ -166,16 +171,23 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
         const chName = chNames[c];
         if (!chName) continue;
         const pl = planes[chName];
+        const p = parentPlanes[chName];
         const hVals = details[c]?.[0];
         const vVals = details[c]?.[1];
         const dVals = details[c]?.[2];
         for (let py = 0; py < 128; py++) {
+          const yPrev = py === 0 ? 0 : -128;
+          const yNext = py === 127 ? 0 : 128;
           for (let pxCoord = 0; pxCoord < 128; pxCoord++) {
+            const xPrev = pxCoord === 0 ? 0 : -1;
+            const xNext = pxCoord === 127 ? 0 : 1;
             const idx = py * 128 + pxCoord;
-            const hVal = hVals?.[idx] ?? 0;
-            const vVal = vVals?.[idx] ?? 0;
+            const hHat = ((p[idx + xPrev] ?? 0) - (p[idx + xNext] ?? 0) + 2) >> 2;
+            const vHat = ((p[idx + yPrev] ?? 0) - (p[idx + yNext] ?? 0) + 2) >> 2;
+            const hVal = (hVals?.[idx] ?? 0) + hHat;
+            const vVal = (vVals?.[idx] ?? 0) + vHat;
             const dVal = dVals?.[idx] ?? 0;
-            const parent = planes[chName][idx] ?? 0;
+            const parent = p[idx] ?? 0;
             const [a, b, cc, dd] = invBlock(parent, hVal, vVal, dVal);
             pl[(2 * py) * 256 + 2 * pxCoord] = a;
             pl[(2 * py) * 256 + 2 * pxCoord + 1] = b;

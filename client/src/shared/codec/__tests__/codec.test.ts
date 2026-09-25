@@ -65,4 +65,67 @@ describe('s+inverse', () => {
     expect(spPredictV(10, 6)).toBe((10 - 6 + 2) >> 2);
     for (const x of [-1020, -5, 0, 7, 1020]) expect(dequant(quant(x, 1), 1)).toBe(x);
   });
+  it('lossless round-trips a 256x256 plane with S+P prediction', () => {
+    const orig = new Int16Array(256 * 256);
+    for (let i = 0; i < orig.length; i++) orig[i] = ((i * 37 + 11) % 256) - 128;
+    const parent = new Int16Array(128 * 128);
+    const hDet = new Int16Array(128 * 128);
+    const vDet = new Int16Array(128 * 128);
+    const dDet = new Int16Array(128 * 128);
+    for (let py = 0; py < 128; py++) {
+      for (let px = 0; px < 128; px++) {
+        const a = orig[(2 * py) * 256 + 2 * px] ?? 0;
+        const b = orig[(2 * py) * 256 + 2 * px + 1] ?? 0;
+        const c = orig[(2 * py + 1) * 256 + 2 * px] ?? 0;
+        const d = orig[(2 * py + 1) * 256 + 2 * px + 1] ?? 0;
+        const f = forwardBlock(a, b, c, d);
+        const idx = py * 128 + px;
+        parent[idx] = f.s;
+        hDet[idx] = f.h;
+        vDet[idx] = f.v;
+        dDet[idx] = f.dv;
+      }
+    }
+    // Encode with S+P prediction
+    const qh = new Int16Array(128 * 128);
+    const qv = new Int16Array(128 * 128);
+    const qd = new Int16Array(128 * 128);
+    for (let py = 0; py < 128; py++) {
+      const yPrev = py === 0 ? 0 : -128;
+      const yNext = py === 127 ? 0 : 128;
+      for (let px = 0; px < 128; px++) {
+        const xPrev = px === 0 ? 0 : -1;
+        const xNext = px === 127 ? 0 : 1;
+        const idx = py * 128 + px;
+        const hHat = ((parent[idx + xPrev] ?? 0) - (parent[idx + xNext] ?? 0) + 2) >> 2;
+        const vHat = ((parent[idx + yPrev] ?? 0) - (parent[idx + yNext] ?? 0) + 2) >> 2;
+        qh[idx] = (hDet[idx] ?? 0) - hHat;
+        qv[idx] = (vDet[idx] ?? 0) - vHat;
+        qd[idx] = dDet[idx] ?? 0;
+      }
+    }
+    // Decode with worker synthesis algorithm
+    const recon = new Int16Array(256 * 256);
+    for (let py = 0; py < 128; py++) {
+      const yPrev = py === 0 ? 0 : -128;
+      const yNext = py === 127 ? 0 : 128;
+      for (let px = 0; px < 128; px++) {
+        const xPrev = px === 0 ? 0 : -1;
+        const xNext = px === 127 ? 0 : 1;
+        const idx = py * 128 + px;
+        const hHat = ((parent[idx + xPrev] ?? 0) - (parent[idx + xNext] ?? 0) + 2) >> 2;
+        const vHat = ((parent[idx + yPrev] ?? 0) - (parent[idx + yNext] ?? 0) + 2) >> 2;
+        const hVal = (qh[idx] ?? 0) + hHat;
+        const vVal = (qv[idx] ?? 0) + vHat;
+        const dVal = qd[idx] ?? 0;
+        const p = parent[idx] ?? 0;
+        const inv = inverseBlock(p, hVal, vVal, dVal);
+        recon[(2 * py) * 256 + 2 * px] = inv.a;
+        recon[(2 * py) * 256 + 2 * px + 1] = inv.b;
+        recon[(2 * py + 1) * 256 + 2 * px] = inv.c;
+        recon[(2 * py + 1) * 256 + 2 * px + 1] = inv.d;
+      }
+    }
+    expect(recon).toEqual(orig);
+  });
 });

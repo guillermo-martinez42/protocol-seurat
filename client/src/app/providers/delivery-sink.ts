@@ -38,7 +38,12 @@ export class DeliverySink {
     private maxBrushes: () => number,
     public seedWidth = 192,
     public seedHeight = 160,
+    public strata = 11,
   ) {}
+
+  get top(): number {
+    return Math.max(0, this.strata - 1);
+  }
 
   private ensureWorker(): Worker {
     if (this.worker) return this.worker;
@@ -171,7 +176,8 @@ export class DeliverySink {
       req.parentY = sourceY;
     }
     if (split.stratum < 10 && !parent?.planes) {
-      const parentId = split.stratum + 1 === 10
+      const isCoarsest = split.stratum + 1 >= this.top;
+      const parentId = isCoarsest
         ? makeBrushId(10, 0, 0)
         : makeBrushId(split.stratum + 1, split.bx >> 1, split.by >> 1);
       this.pending.set(h.delivery, { req, parentId, edition: h.edition });
@@ -199,14 +205,14 @@ export class DeliverySink {
       );
       if (!parent?.planes) continue;
       this.linkParent(delivery, parent.delivery);
-      const { stratum, bx, by } = splitBrushId(
+      const { bx, by } = splitBrushId(
         this.book.byDelivery.get(delivery)?.brushId ?? 0n,
       );
       item.req.parentPlanes = parent.planes.map((plane) => plane.slice(0));
       item.req.parentPlaneWidth = parent.stratum === 10 ? this.seedWidth : 256;
       item.req.parentPlaneHeight = parent.stratum === 10 ? this.seedHeight : 256;
-      item.req.parentX = stratum + 1 === 10 ? bx * 128 : (bx & 1) * 128;
-      item.req.parentY = stratum + 1 === 10 ? by * 128 : (by & 1) * 128;
+      item.req.parentX = parent.stratum === 10 ? bx * 128 : (bx & 1) * 128;
+      item.req.parentY = parent.stratum === 10 ? by * 128 : (by & 1) * 128;
       this.pending.delete(delivery);
       this.dispatch(item.req);
     }
@@ -214,7 +220,8 @@ export class DeliverySink {
 
   private parentFor(stratum: number, bx: number, by: number, edition?: number, epoch?: number): DeliveryRecord | null {
     if (stratum >= 10) return null;
-    const parentId = stratum + 1 === 10
+    const isCoarsest = stratum + 1 >= this.top;
+    const parentId = isCoarsest
       ? makeBrushId(10, 0, 0)
       : makeBrushId(stratum + 1, bx >> 1, by >> 1);
     return [...this.book.byDelivery.values()]
