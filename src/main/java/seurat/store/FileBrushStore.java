@@ -75,9 +75,7 @@ public final class FileBrushStore implements BrushStore {
     }
 
     private Path seedPath() {
-        Path p = dir.resolve("semilla.bin");
-        Path ed1 = dir.resolve("ed1/semilla.bin");
-        return !Files.exists(p) && Files.exists(ed1) ? ed1 : p;
+        return dir.resolve("semilla.bin");
     }
 
     @Override
