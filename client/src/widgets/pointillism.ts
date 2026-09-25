@@ -1,4 +1,12 @@
 import { hash3 } from '@/shared/lib/hash3';
+import {
+  TAU,
+  DOT_GROWTH_BASE,
+  DOT_GROWTH_RANGE,
+  DOT_JITTER_MAX,
+  DOT_RADIUS_BASE,
+  DOT_RADIUS_VARIATION,
+} from '@/shared/config/render';
 
 export interface PointillismBrush {
   x: number;
@@ -52,8 +60,7 @@ export function drawPointillism(
 
   const imgData = sctx.getImageData(0, 0, sw, sh);
   const data = imgData.data;
-  const grow = 0.4 + 0.6 * f;
-  const twoPi = Math.PI * 2;
+  const grow = DOT_GROWTH_BASE + DOT_GROWTH_RANGE * f;
 
   for (let gy = 0; gy < sh; gy++) {
     const iy = y0 + gy;
@@ -70,15 +77,15 @@ export function drawPointillism(
       const [h1, h2, h3] = hash3(ix, iy);
       let cx = tx + (ix + 0.5) * s;
       let cy = ty + (iy + 0.5) * s;
-      cx += (h1 - 0.5) * s * 0.24;
-      cy += (h2 - 0.5) * s * 0.24;
-      const rad = s * (0.33 + 0.15 * h3) * grow;
+      cx += (h1 - 0.5) * s * DOT_JITTER_MAX;
+      cy += (h2 - 0.5) * s * DOT_JITTER_MAX;
+      const rad = s * (DOT_RADIUS_BASE + DOT_RADIUS_VARIATION * h3) * grow;
 
       if (cx + rad < cx0 || cx - rad > cx1 || cy + rad < cy0 || cy - rad > cy1) continue;
 
       ctx.fillStyle = `rgb(${r},${g},${b})`;
       ctx.beginPath();
-      ctx.arc(cx, cy, rad, 0, twoPi);
+      ctx.arc(cx, cy, rad, 0, TAU);
       ctx.fill();
     }
   }
