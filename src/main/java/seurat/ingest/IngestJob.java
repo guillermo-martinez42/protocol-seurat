@@ -1,5 +1,7 @@
 package seurat.ingest;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
@@ -34,6 +36,12 @@ public final class IngestJob implements Runnable {
     @Override
     public void run() {
         try {
+            WorkRecord existing = catalog.get(id);
+            if (existing != null && existing.store != null
+                    && existing.meta.state() == ProtoCodes.ST_LISTA) {
+                Log.info("ingest", "Work already completed, skipping: " + id);
+                return;
+            }
             Log.info("ingest", "Ingest started for '" + id + "' [" + name + "] from " + master.getFileName());
             catalog.register(new WorkRecord(new WorkMeta(id, name, 0, 0, 256, 0,
                     ProtoCodes.ST_RECIBIENDO, 1, 0, 2)));
@@ -48,6 +56,11 @@ public final class IngestJob implements Runnable {
                 FileBrushStore ed1 = store(top, w, h, 1);
                 SketchBuilder.build(master, ed1, top);
                 ed1.close();
+                Path seed = ed1.dir().resolve("semilla.bin");
+                if (!Files.isRegularFile(seed)
+                        || Files.size(seed) <= 4) {
+                    throw new IOException("sketch seed was not written");
+                }
                 catalog.sketch(id, ed1, ProtoCodes.ST_BOCETO, 1);
                 Log.info("ingest", "Work '" + id + "' ed1 sketch generated (ST_BOCETO)");
                 FileBrushStore ed2 = store(top, w, h, 2);

@@ -1,0 +1,11 @@
+.svg {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+.fontIcon {
+  font-family: 'Material Symbols Rounded', system-ui, sans-serif;
+  line-height: 1;
+  font-size: var(--icon-size, 24px);
+}

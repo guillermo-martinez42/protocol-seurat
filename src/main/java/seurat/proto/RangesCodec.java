@@ -35,12 +35,8 @@ public final class RangesCodec {
         long largest = VarInt.get(b);
         Ranges.Builder out = new Ranges.Builder();
         if (largest == 0) {
-            if (b.hasRemaining()) {
-                VarInt.get(b);
-                if (b.hasRemaining()) {
-                    VarInt.get(b);
-                }
-            }
+            VarInt.get(b); // n_huecos (0)
+            VarInt.get(b); // primer_rango (0)
             return out.build();
         }
         long huecos = VarInt.get(b);

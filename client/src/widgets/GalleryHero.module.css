@@ -1,0 +1,77 @@
+.heroCard {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-hero);
+  background: var(--hero);
+  min-height: 420px;
+  display: flex;
+  align-items: flex-end;
+  cursor: zoom-in;
+}
+
+.canvas {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 70%;
+  height: 100%;
+  display: block;
+  mask-image: linear-gradient(to right, transparent 0%, #000 42%);
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, #000 42%);
+}
+
+.content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 56px;
+  max-width: 660px;
+}
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 14px 0 10px;
+  border-radius: 16px;
+  background: var(--badge-bg);
+  color: var(--badge-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(60px, 9vw, 128px);
+  line-height: 0.9;
+  font-weight: 800;
+  font-variation-settings: 'wdth' 118, 'opsz' 144;
+  letter-spacing: -0.04em;
+  color: var(--primary-deep);
+}
+
+.description {
+  margin: 0;
+  max-width: 440px;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--text-hero-body);
+}
+
+.captionChip {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 16px;
+  background: rgba(251, 248, 255, 0.92);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}

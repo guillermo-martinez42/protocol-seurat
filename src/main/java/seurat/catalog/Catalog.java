@@ -98,7 +98,7 @@ public final class Catalog {
                 String defaultId = worksDir.relativize(dir).toString().replace('\\', '/');
                 var info = MetaJson.read(defaultId, Files.readString(meta));
                 WorkRecord work = new WorkRecord(info);
-                if (info.strata() > 0) {
+                if (info.strata() > 0 && readyState(info.state())) {
                     int top = info.strata() - 1;
                     int[] nx = new int[top];
                     int[] ny = new int[top];
@@ -111,11 +111,18 @@ public final class Catalog {
                     Path storeDir = info.edition() == 1 && Files.exists(dir.resolve("ed1"))
                             ? dir.resolve("ed1")
                             : dir;
-                    work.store = new FileBrushStore(storeDir, info, nx, ny);
+                    Path seed = storeDir.resolve("semilla.bin");
+                    if (Files.isRegularFile(seed) && Files.size(seed) > 4) {
+                        work.store = new FileBrushStore(storeDir, info, nx, ny);
+                    }
                 }
                 records.put(info.id(), work);
             }
         }
+    }
+
+    private static boolean readyState(int state) {
+        return state == ProtoCodes.ST_BOCETO || state == ProtoCodes.ST_LISTA;
     }
 
     private MsgCatalog.WorkMessage message(WorkRecord work, int event, int progress) {

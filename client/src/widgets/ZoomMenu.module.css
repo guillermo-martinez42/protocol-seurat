@@ -1,0 +1,11 @@
+.note {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.check {
+  color: var(--pill);
+}

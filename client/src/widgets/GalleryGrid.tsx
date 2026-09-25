@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type CSSProperties } from 'react';
 import { hash3 } from '@/shared/lib/hash3';
 import { useWorkPreview } from '@/entities/work';
 import { drawScaledRgba } from '@/shared/codec/seed';
@@ -6,6 +6,7 @@ import type { Work } from '@/entities/work/types';
 import { workDims, workTitle } from '@/entities/work/types';
 import type { Filter } from '@/entities/work/store';
 import { Icon } from '@/shared/ui/Icon';
+import styles from './GalleryGrid.module.css';
 
 function Thumb({ work }: { work: Work }): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -44,7 +45,7 @@ function Thumb({ work }: { work: Work }): JSX.Element {
     ctx.putImageData(img, 0, 0);
   }, [work, preview]);
 
-  return <canvas ref={ref} style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />;
+  return <canvas ref={ref} className={styles.thumbCanvas} />;
 }
 
 interface Props {
@@ -55,6 +56,7 @@ interface Props {
   onOpen: (id: string) => void;
 }
 
+<<<<<<< HEAD
 export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): JSX.Element {
   const chips: Array<[Filter, string]> = [
     ['all', 'All'],
@@ -62,43 +64,55 @@ export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): J
     ['landscape', 'Landscape'],
     ['portrait', 'Portrait'],
   ];
+=======
+const CHIPS: Array<[Filter, string]> = [
+  ['all', 'All'],
+  ['landscape', 'Landscape'],
+  ['portrait', 'Portrait'],
+];
+>>>>>>> f73fa7b395529297e44c096cb0cbfa538585f92a
 
   return (
     <>
+<<<<<<< HEAD
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
           {chips.map(([k, label]) => {
+=======
+      <div className={styles.filterBar}>
+        <div className={styles.chipGroup}>
+          {CHIPS.map(([k, label]) => {
+>>>>>>> f73fa7b395529297e44c096cb0cbfa538585f92a
             const on = filter === k;
             return (
               <button
                 key={k}
                 onClick={() => onFilter(k)}
-                className={on ? undefined : 'chip-off'}
-                style={on
-                  ? { display: 'flex', alignItems: 'center', gap: 6, height: 40, padding: '0 18px 0 12px', border: 'none', borderRadius: 12, background: '#DEE1F9', color: '#171B2C', fontSize: 14, fontWeight: 600, cursor: 'pointer' }
-                  : undefined}
+                className={on ? styles.chipOn : 'chip-off'}
               >
                 {on ? <Icon name="check" size={18} /> : null}{label}
               </button>
             );
           })}
         </div>
-        <span style={{ fontSize: 14, color: '#45464F' }}>{items.length} images</span>
+        <span className={styles.counter}>{items.length} images</span>
       </div>
-      <div style={{ columns: '300px', columnGap: 24 }}>
+      <div className={styles.masonry}>
         {items.map((w, i) => (
           <div
             key={w.id}
             onClick={() => onOpen(w.id)}
             className="gallery-card"
-            style={{ breakInside: 'avoid', pageBreakInside: 'avoid', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32, cursor: 'zoom-in' }}
           >
-            <div className="gallery-card-thumb" style={{ aspectRatio: `${w.width} / ${w.height}` }}>
+            <div
+              className={`gallery-card-thumb ${styles.cardThumb}`}
+              style={{ '--ratio': `${w.width} / ${w.height}` } as CSSProperties}
+            >
               <Thumb work={w} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '0 10px' }}>
-              <span style={{ fontSize: 17, fontWeight: 650, fontVariationSettings: "'wdth' 112" }}>{workTitle(w, i)}</span>
-              <span style={{ fontSize: 13, color: '#45464F', fontVariantNumeric: 'tabular-nums' }}>{workDims(w)}</span>
+            <div className={styles.cardMeta}>
+              <span className={styles.cardTitle}>{workTitle(w, i)}</span>
+              <span className={styles.cardDims}>{workDims(w)}</span>
             </div>
             {w.tag && (
               <div style={{ padding: '0 10px', marginTop: -4 }}>

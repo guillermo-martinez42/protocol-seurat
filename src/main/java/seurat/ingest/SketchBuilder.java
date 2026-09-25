@@ -1,6 +1,7 @@
 package seurat.ingest;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Iterator;
 import javax.imageio.ImageIO;
@@ -36,7 +37,7 @@ final class SketchBuilder {
                 img = reader.read(0, param);
             } catch (Exception ex) {
                 reader.dispose();
-                return;
+                throw new IOException("sketch decode failed", ex);
             }
             int sw = img.getWidth();
             int sh = img.getHeight();

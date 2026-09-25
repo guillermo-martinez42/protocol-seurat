@@ -1,5 +1,6 @@
-import { useRef } from 'react';
+import { useRef, type CSSProperties } from 'react';
 import { clamp } from '@/shared/lib/clamp';
+import styles from './Slider.module.css';
 
 interface Props {
   frac: number;
@@ -38,11 +39,12 @@ export function Slider({ frac, onSeek }: Props): JSX.Element {
       onPointerCancel={() => {
         sliding.current = false;
       }}
-      style={{ position: 'relative', width: 168, height: 48, cursor: 'pointer', touchAction: 'none' }}
+      className={styles.track}
+      style={{ '--pct': `${pct}%` } as CSSProperties}
     >
-      <div style={{ position: 'absolute', left: 0, top: 16, height: 16, width: 'max(0px, calc(' + pct + '% - 8px))', borderRadius: '8px 4px 4px 8px', background: '#B8C4FF' }} />
-      <div style={{ position: 'absolute', left: 'calc(' + pct + '% - 2px)', top: 4, width: 4, height: 40, borderRadius: 2, background: '#B8C4FF' }} />
-      <div style={{ position: 'absolute', left: 'min(100%, calc(' + pct + '% + 8px))', right: 0, top: 16, height: 16, borderRadius: '4px 8px 8px 4px', background: '#414659' }} />
+      <div className={styles.fill} />
+      <div className={styles.thumb} />
+      <div className={styles.unfill} />
     </div>
   );
 }

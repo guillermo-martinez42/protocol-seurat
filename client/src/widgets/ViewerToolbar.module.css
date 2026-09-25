@@ -1,0 +1,61 @@
+.toolbar {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 36px;
+  background: var(--surface-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.toolButton {
+  width: 48px;
+  height: 48px;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--text-contrast, #E3E1E9);
+}
+
+.activeToolButton {
+  border-radius: 16px;
+  background: var(--badge-bg, #B8C4FF);
+  color: var(--badge-text, #1F2D6F);
+}
+
+.menuAnchor {
+  position: relative;
+}
+
+.zoomButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 104px;
+  height: 48px;
+  padding: 0 10px 0 16px;
+  border-radius: 24px;
+  background: var(--surface-container);
+  color: var(--text-on-container);
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.divider {
+  width: 1px;
+  height: 28px;
+  background: var(--border-line);
+  margin: 0 6px;
+}
+
+.oneToOneButton {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+  font-weight: 750;
+}

@@ -1,0 +1,28 @@
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 18px;
+  border: 1px solid var(--visor-dim);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--border-line);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-radius 250ms, background 200ms;
+}
+
+.chip:hover {
+  background: #EFEDF4;
+}
+
+.on {
+  padding: 0 18px 0 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--text-on-container);
+  color: #171B2C;
+  font-weight: 600;
+}

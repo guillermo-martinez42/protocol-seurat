@@ -1,4 +1,5 @@
 import { Icon } from '@/shared/ui/Icon';
+import styles from './ViewerInfoPanel.module.css';
 
 export interface InfoRow {
   k: string;
@@ -20,28 +21,28 @@ const KEYS = [
 
 export function ViewerInfoPanel({ rows, onClose }: { rows: InfoRow[]; onClose(): void }): JSX.Element {
   return (
-    <aside style={{ position: 'absolute', top: 88, right: 16, bottom: 284, width: 320, maxWidth: 'calc(100% - 32px)', overflow: 'auto', padding: 24, borderRadius: 28, background: '#1A1B21', boxShadow: '0 12px 32px rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column', gap: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{ fontSize: 22, fontWeight: 700, fontVariationSettings: "'wdth' 115" }}>Details</span>
-        <button onClick={onClose} className="visor-btn" style={{ width: 40, height: 40, borderRadius: 20, background: '#292A2F', color: '#E3E1E9' }}>
+    <aside className={styles.panel}>
+      <div className={styles.header}>
+        <span className={styles.title}>Details</span>
+        <button onClick={onClose} className={`visor-btn ${styles.closeButton}`}>
           <Icon name="close" size={20} />
         </button>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className={styles.rowsList}>
         {rows.map((r) => (
-          <div key={r.k} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 14 }}>
-            <span style={{ color: '#8F909A' }}>{r.k}</span>
-            <span style={{ color: '#E3E1E9', textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.v}</span>
+          <div key={r.k} className={styles.row}>
+            <span className={styles.keyLabel}>{r.k}</span>
+            <span className={styles.valLabel}>{r.v}</span>
           </div>
         ))}
       </div>
-      <div style={{ height: 1, background: '#34343A' }} />
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#B8C4FF' }}>Shortcuts</span>
+      <div className={styles.divider} />
+      <div className={styles.shortcutsList}>
+        <span className={styles.sectionTitle}>Shortcuts</span>
         {KEYS.map((k) => (
-          <div key={k.a} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 14 }}>
-            <span style={{ color: '#C5C6D0' }}>{k.a}</span>
-            <span style={{ padding: '3px 10px', borderRadius: 8, background: '#292A2F', color: '#E3E1E9', fontSize: 12, fontWeight: 600 }}>{k.k}</span>
+          <div key={k.a} className={styles.shortcutRow}>
+            <span className={styles.shortcutAction}>{k.a}</span>
+            <span className={styles.keyBadge}>{k.k}</span>
           </div>
         ))}
       </div>

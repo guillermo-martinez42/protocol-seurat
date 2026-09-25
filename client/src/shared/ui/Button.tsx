@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
+import styles from './Button.module.css';
 
 interface Props {
   children: ReactNode;
@@ -9,16 +10,9 @@ interface Props {
 }
 
 export function Button({ children, onClick, title, style, activeStyle }: Props): JSX.Element {
+  const cls = activeStyle === 'pill' ? `${styles.button} ${styles.pill}` : styles.button;
   return (
-    <button
-      onClick={onClick}
-      title={title}
-      style={{
-        width: 48, height: 48, display: 'grid', placeItems: 'center', border: 'none',
-        borderRadius: activeStyle === 'pill' ? 16 : 24, background: 'transparent',
-        color: '#E3E1E9', cursor: 'pointer', ...style,
-      }}
-    >
+    <button onClick={onClick} title={title} className={cls} style={style}>
       {children}
     </button>
   );

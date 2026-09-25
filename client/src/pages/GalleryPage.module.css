@@ -1,0 +1,87 @@
+.page {
+  min-height: 100vh;
+  background: var(--surface-canvas, #FBF8FF);
+}
+
+.header {
+  max-width: var(--gallery-max-width, 1440px);
+  margin: 0 auto;
+  padding: 20px 32px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.brand {
+  font-size: 22px;
+  font-weight: 720;
+  font-variation-settings: 'wdth' 125;
+  letter-spacing: -0.01em;
+  color: var(--text-primary, #191B23);
+}
+
+.main {
+  max-width: var(--gallery-max-width, 1440px);
+  margin: 0 auto;
+  padding: 4px 32px 96px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+.dotMark {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+
+.dot1 {
+  position: absolute;
+  left: 2px;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #4355B9;
+}
+
+.dot2 {
+  position: absolute;
+  left: 19px;
+  top: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #FF8A5B;
+}
+
+.dot3 {
+  position: absolute;
+  left: 21px;
+  top: 15px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #9A4521;
+}
+
+.dot4 {
+  position: absolute;
+  left: 6px;
+  top: 21px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #B8C4FF;
+}
+
+.dot5 {
+  position: absolute;
+  left: 15px;
+  top: 28px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4355B9;
+}

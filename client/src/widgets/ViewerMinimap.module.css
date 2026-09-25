@@ -1,0 +1,16 @@
+.panel {
+  position: absolute;
+  right: 16px;
+  bottom: 100px;
+  padding: 8px;
+  border-radius: 24px;
+  background: var(--surface-card);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.canvas {
+  display: block;
+  border-radius: 16px;
+  cursor: crosshair;
+  touch-action: none;
+}

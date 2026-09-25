@@ -1,8 +1,10 @@
 import type { CSSProperties } from 'react';
+import styles from './Icon.module.css';
 
 interface Props {
   name: string;
   size?: number;
+  className?: string;
   style?: CSSProperties;
 }
 
@@ -34,7 +36,7 @@ const SVG_ICONS: Record<string, JSX.Element> = {
   close: <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />,
 };
 
-export function Icon({ name, size = 24, style }: Props): JSX.Element {
+export function Icon({ name, size = 24, className, style }: Props): JSX.Element {
   const svg = SVG_ICONS[name];
   if (svg) {
     return (
@@ -44,7 +46,8 @@ export function Icon({ name, size = 24, style }: Props): JSX.Element {
         fill="currentColor"
         width={size}
         height={size}
-        style={{ display: 'inline-block', verticalAlign: 'middle', flexShrink: 0, ...style }}
+        className={`${styles.svg} ${className ?? ''}`}
+        style={style}
       >
         {svg}
       </svg>
@@ -53,12 +56,11 @@ export function Icon({ name, size = 24, style }: Props): JSX.Element {
   return (
     <span
       aria-hidden="true"
+      className={`${styles.fontIcon} ${className ?? ''}`}
       style={{
-        fontFamily: "'Material Symbols Rounded', system-ui, sans-serif",
-        fontSize: size,
-        lineHeight: 1,
+        '--icon-size': `${size}px`,
         ...style,
-      }}
+      } as CSSProperties}
     >
       {name}
     </span>

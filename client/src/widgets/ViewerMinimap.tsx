@@ -4,6 +4,9 @@ import { splitBrushId } from '@/shared/proto/brush';
 import type { DeliverySink } from '@/app/providers/delivery-sink';
 import type { ChromeApi, ViewSync } from './ViewerChrome';
 
+import { MINIMAP_MAX_H, MINIMAP_MAX_W } from '@/shared/config/layout';
+import styles from './ViewerMinimap.module.css';
+
 interface Props {
   api: { current: ChromeApi | null };
   view: ViewSync | null;
@@ -21,7 +24,7 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
   useEffect(() => {
     const m = ref.current;
     if (!m || !view) return;
-    const k = Math.min(180 / iw, 140 / ih);
+    const k = Math.min(MINIMAP_MAX_W / iw, MINIMAP_MAX_H / ih);
     const w = Math.max(8, Math.round(iw * k));
     const h = Math.max(8, Math.round(ih * k));
     const dpr = window.devicePixelRatio || 1;
@@ -98,12 +101,12 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
     const m = ref.current;
     if (!m) return;
     const r = m.getBoundingClientRect();
-    const k = Math.min(180 / iw, 140 / ih);
+    const k = Math.min(MINIMAP_MAX_W / iw, MINIMAP_MAX_H / ih);
     api.current?.panTo((clientX - r.left) / k, (clientY - r.top) / k);
   };
 
   return (
-    <div style={{ position: 'absolute', right: 16, bottom: 100, padding: 8, borderRadius: 24, background: '#1E1F25', boxShadow: '0 8px 24px rgba(0,0,0,0.45)' }}>
+    <div className={styles.panel}>
       <canvas
         ref={ref}
         onPointerDown={(e) => {
@@ -120,7 +123,7 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
         onPointerCancel={() => {
           drag.current = false;
         }}
-        style={{ display: 'block', borderRadius: 16, cursor: 'crosshair', touchAction: 'none' }}
+        className={styles.canvas}
       />
     </div>
   );

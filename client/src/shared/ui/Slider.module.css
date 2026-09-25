@@ -1,0 +1,37 @@
+.track {
+  position: relative;
+  width: 168px;
+  height: 48px;
+  cursor: pointer;
+  touch-action: none;
+}
+
+.fill {
+  position: absolute;
+  left: 0;
+  top: 16px;
+  height: 16px;
+  width: max(0px, calc(var(--pct) - 8px));
+  border-radius: 8px 4px 4px 8px;
+  background: var(--pill);
+}
+
+.thumb {
+  position: absolute;
+  left: calc(var(--pct) - 2px);
+  top: 4px;
+  width: 4px;
+  height: 40px;
+  border-radius: 2px;
+  background: var(--pill);
+}
+
+.unfill {
+  position: absolute;
+  left: min(100%, calc(var(--pct) + 8px));
+  right: 0;
+  top: 16px;
+  height: 16px;
+  border-radius: 4px 8px 8px 4px;
+  background: var(--surface-container);
+}

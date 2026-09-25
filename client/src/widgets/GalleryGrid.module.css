@@ -1,0 +1,69 @@
+.filterBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.chipGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chipOn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 18px 0 12px;
+  border: none;
+  border-radius: 12px;
+  background: var(--text-on-container);
+  color: #171B2C;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.counter {
+  font-size: 14px;
+  color: var(--border-line);
+}
+
+.masonry {
+  columns: var(--gallery-columns-w, 300px);
+  column-gap: 24px;
+}
+
+.cardThumb {
+  aspect-ratio: var(--ratio, 3 / 2);
+}
+
+.thumbCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardMeta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 10px;
+}
+
+.cardTitle {
+  font-size: 17px;
+  font-weight: 650;
+  font-variation-settings: 'wdth' 112;
+}
+
+.cardDims {
+  font-size: 13px;
+  color: var(--border-line);
+  font-variant-numeric: tabular-nums;
+}
