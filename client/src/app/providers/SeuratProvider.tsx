@@ -90,6 +90,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
           () => concessionRef.current?.maxBrushes ?? 768,
           a.seedWidth,
           a.seedHeight,
+          a.strata,
         );
         sinkRef.current = sink;
         telemetryRef.current = new ImageTelemetry(a.handle, performance.now());

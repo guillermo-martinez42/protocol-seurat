@@ -70,6 +70,75 @@ function makeDeliveryBytes(opts: {
 }
 
 describe('DeliverySink', () => {
+  it('atomically cleans up synthesis failures and releases the full subtree once', () => {
+    const client = fakeClient();
+    const postMessage = vi.fn();
+    const worker = { onmessage: null as ((event: MessageEvent) => void) | null, postMessage, terminate: vi.fn() };
+    vi.stubGlobal('Worker', class {
+      get onmessage() { return worker.onmessage; }
+      set onmessage(value: ((event: MessageEvent) => void) | null) { worker.onmessage = value; }
+      postMessage = worker.postMessage;
+      terminate = worker.terminate;
+    });
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
+    sink.ingest(makeDeliveryBytes({
+      handle: 1, delivery: 10, brushId: makeBrushId(10, 0, 0), from: 0, through: 1, epoch: 1,
+    }), () => 1000, () => {}, 120);
+    sink.book.byDelivery.set(20, {
+      delivery: 20, brushId: makeBrushId(9, 0, 0), stratum: 9,
+      from: 0, through: 1, bytes: 5, epoch: 1, edition: 1, expires: 121000, rgba: null,
+    });
+    sink.book.parentOf.set(20, 10);
+    sink.book.childrenOf.set(10, new Set([20]));
+    const req = postMessage.mock.calls[0]?.[0] as { delivery: number; synthesisId: number };
+    const failure = { data: { delivery: req.delivery, synthesisId: req.synthesisId, ok: false, rgba: null, planes: null } } as MessageEvent;
+    worker.onmessage?.(failure);
+    worker.onmessage?.(failure);
+    expect(sink.book.byDelivery.has(10)).toBe(false);
+    expect(sink.book.byDelivery.has(20)).toBe(false);
+    expect(sink.book.inFlight.has(10)).toBe(false);
+    expect(client.sentRelease).toEqual([{ handle: 1, reason: 2, ranges: [10, 20] }]);
+    sink.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it('deduplicates receipt when synthesis result is replayed after acknowledgement', async () => {
+    const client = fakeClient();
+    const postMessage = vi.fn();
+    const worker = { onmessage: null as ((event: MessageEvent) => void) | null, postMessage, terminate: vi.fn() };
+    vi.stubGlobal('Worker', class {
+      get onmessage() { return worker.onmessage; }
+      set onmessage(value: ((event: MessageEvent) => void) | null) { worker.onmessage = value; }
+      postMessage = worker.postMessage;
+      terminate = worker.terminate;
+    });
+    vi.stubGlobal('ImageData', class {
+      constructor(public data: Uint8ClampedArray, public width: number, public height: number) {}
+    });
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ close: vi.fn() })));
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
+    sink.ingest(makeDeliveryBytes({
+      handle: 1, delivery: 11, brushId: makeBrushId(10, 0, 0), from: 0, through: 1, epoch: 1,
+    }), () => 1000, () => {}, 120);
+    const req = postMessage.mock.calls[0]?.[0] as { delivery: number; synthesisId: number };
+    const result = {
+      data: { delivery: req.delivery, synthesisId: req.synthesisId, ok: true,
+        rgba: new ArrayBuffer(4), planes: [], width: 1, height: 1, elapsedMs: 1 },
+    } as MessageEvent;
+    worker.onmessage?.(result);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sink.book.pendingReceipt).toEqual([11]);
+    (sink as unknown as { flushReceipt: () => void }).flushReceipt();
+    worker.onmessage?.(result);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(sink.book.pendingReceipt).toEqual([]);
+    expect(client.sentReceipt).toHaveLength(1);
+    sink.dispose();
+    vi.unstubAllGlobals();
+  });
+
   it('rejects delivery with mismatched CRC and sends SOLTAR reason=6', () => {
     const client = fakeClient();
     const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
@@ -203,6 +272,29 @@ describe('DeliverySink', () => {
     vi.advanceTimersByTime(100);
     expect(client.sentRelease).toEqual([{ handle: 1, reason: 3, ranges: [1] }]);
 
+    sink.dispose();
+    vi.useRealTimers();
+  });
+
+  it('sweepExpiry releases an expired subtree without duplicate delivery numbers', () => {
+    vi.useFakeTimers();
+    const client = fakeClient();
+    const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
+    sink.book.byDelivery.set(1, {
+      delivery: 1, brushId: makeBrushId(2, 0, 0), stratum: 2,
+      from: 0, through: 1, bytes: 500, epoch: 1, edition: 1, expires: 500, rgba: null,
+    });
+    sink.book.byDelivery.set(2, {
+      delivery: 2, brushId: makeBrushId(1, 0, 0), stratum: 1,
+      from: 0, through: 1, bytes: 500, epoch: 1, edition: 1, expires: 500, rgba: null,
+    });
+    sink.book.parentOf.set(2, 1);
+    sink.book.childrenOf.set(1, new Set([2]));
+
+    sink.sweepExpiry(() => 1000);
+    vi.advanceTimersByTime(100);
+
+    expect(client.sentRelease).toEqual([{ handle: 1, reason: 3, ranges: [1, 2] }]);
     sink.dispose();
     vi.useRealTimers();
   });

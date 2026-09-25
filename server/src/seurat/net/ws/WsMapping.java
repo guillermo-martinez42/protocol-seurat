@@ -52,9 +52,6 @@ public final class WsMapping implements Mapping {
                     control.put(Arrays.copyOfRange(m.data(), 1, m.data().length));
                 } else if (channel == 2) {
                     byte[] raw = Arrays.copyOfRange(m.data(), 1, m.data().length);
-                    if (raw.length > 0 && (raw[0] & 0xFF) == FrameType.MIRADA) {
-                        raw = Arrays.copyOfRange(raw, 1, raw.length);
-                    }
                     control.put(new Frame(FrameType.MIRADA, raw).encode());
                 }
             }

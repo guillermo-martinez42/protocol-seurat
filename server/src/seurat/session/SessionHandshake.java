@@ -100,11 +100,18 @@ final class SessionHandshake {
         // Adopt only what the client says it still holds (spec 8): a reloaded page claims
         // nothing, and adopting full books would fail the next INVENTARIO audit.
         List<Long> resumed = new ArrayList<>();
+        long now = System.nanoTime();
         for (var claim : request.claims()) {
             Canvas canvas = grave.session().canvases().get(claim.handle());
-            canvas.book().retainOnly(Long.MAX_VALUE, claim.ranges());
+            if (canvas == null) {
+                continue;
+            }
             canvas.session(session);
+            canvas.auditNs = now;
+            canvas.renewNs = now;
+            canvas.book().retainOnly(canvas.book().lastNumber(), claim.ranges());
             session.canvases().put(claim.handle(), canvas);
+            session.claimHandle(claim.handle());
             resumed.add(claim.handle());
         }
         grave.session().canvases().keySet().forEach(session::claimHandle);

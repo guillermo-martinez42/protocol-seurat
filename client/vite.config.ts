@@ -14,7 +14,7 @@ export default defineConfig({
       '/seurat': { target: 'http://localhost:8080', changeOrigin: false, ws: true },
     },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: { outDir: 'dist', emptyOutDir: false },
   resolve: { alias: { '@': resolve(here, 'src') } },
   worker: { format: 'es' },
   test: { environment: 'node', include: ['src/**/*.test.ts', 'src/**/*.test.tsx'] },

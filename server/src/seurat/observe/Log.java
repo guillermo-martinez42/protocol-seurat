@@ -11,6 +11,7 @@ public final class Log {
 
     private static volatile LogLevel currentLevel = LogLevel.INFO;
     private static volatile PrintStream target = System.out;
+    private static final Object PRINT_LOCK = new Object();
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
     private static final boolean COLOR = (System.console() != null
             || (System.getenv("TERM") != null && !"dumb".equals(System.getenv("TERM"))))
@@ -84,10 +85,13 @@ public final class Log {
               .append("[").append(paddedTag).append("] ")
               .append(msg);
         }
-        PrintStream out = target;
-        out.println(sb);
-        if (t != null) {
-            t.printStackTrace(out);
+        synchronized (PRINT_LOCK) {
+            PrintStream out = target;
+            out.println(sb);
+            if (t != null) {
+                t.printStackTrace(out);
+            }
+            out.flush();
         }
     }
 
