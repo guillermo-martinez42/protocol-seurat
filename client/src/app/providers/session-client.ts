@@ -79,14 +79,14 @@ export class SessionClient {
     return this.transport;
   }
 
-  async boot(): Promise<void> {
+  async boot(claims?: Array<{ handle: number; ranges: number[] }>): Promise<void> {
     const resume = loadResume();
     const ses = await postSession(CLIENT_NAME, this.memMib, ['webtransport', 'websocket']);
     const token = tokenFromHex(ses.token);
     const t = await this.connect(ses.lienzo, ses.respaldo);
     this.transport = t;
-    const claim = resume
-      ? { previousSession: resume.sessionId, ticket: resume.ticket, claims: [] as Array<{ handle: number; ranges: number[] }> }
+    const claim = resume && claims && claims.length > 0
+      ? { previousSession: resume.sessionId, ticket: resume.ticket, claims }
       : undefined;
     const s = { minVersion: 1, maxVersion: 1, caps: CAP_DATAGRAMAS | CAP_REANUDAR, memMib: this.memMib, token, resume: claim };
     t.sendControl(encodeFrame(T.SALUDO, helloCore(s), helloTlvs(s)));

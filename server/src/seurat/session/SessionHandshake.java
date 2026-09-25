@@ -98,11 +98,19 @@ final class SessionHandshake {
             return List.of();
         }
         List<Long> resumed = new ArrayList<>();
-        for (var entry : grave.session().canvases().entrySet()) {
-            entry.getValue().session(session);
-            session.canvases().put(entry.getKey(), entry.getValue());
-            session.claimHandle(entry.getKey());
-            resumed.add(entry.getKey());
+        long now = System.nanoTime();
+        for (var claim : request.claims()) {
+            Canvas canvas = grave.session().canvases().get(claim.handle());
+            if (canvas == null) {
+                continue;
+            }
+            canvas.session(session);
+            canvas.auditNs = now;
+            canvas.renewNs = now;
+            canvas.book().retainOnly(canvas.book().lastNumber(), claim.ranges());
+            session.canvases().put(claim.handle(), canvas);
+            session.claimHandle(claim.handle());
+            resumed.add(claim.handle());
         }
         Log.info("session", "Session " + session.id() + " resumed " + resumed.size() + " canvas(es)");
         session.ticket(sessions.newTicket());
