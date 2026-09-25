@@ -36,6 +36,14 @@ public final class HttpSurfaceTest {
                 new byte[0], "localhost"));
         TestKit.check(missing.code() == 404, "GET 404");
 
+        Path assets = web.resolve("assets");
+        Files.createDirectories(assets);
+        Files.writeString(assets.resolve("synthesis.worker-12345.js"), "worker-body");
+        var workerFallback = http.route(new HttpSurface.Request("GET",
+                "/assets/synthesis.worker-99999.js", Map.of(), new byte[0], "localhost"));
+        TestKit.check(workerFallback.code() == 200
+                && new String(workerFallback.body()).contains("worker-body"), "worker fallback serves");
+
         var sessionResp = http.route(new HttpSurface.Request("POST", "/seurat/v1/sesion",
                 Map.of("authorization", "Bearer abc"), "{\"memMiB\":256}".getBytes(),
                 "example.edu:8080"));

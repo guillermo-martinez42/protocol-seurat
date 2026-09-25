@@ -17,9 +17,31 @@ final class StaticFiles {
         String rel = clean.isEmpty() ? "index.html" : clean;
         Path file = root.resolve(rel).normalize();
         if (!file.startsWith(root) || !Files.isRegularFile(file)) {
-            return null;
+            file = fallback(rel);
+            if (file == null) {
+                return null;
+            }
         }
         return Files.readAllBytes(file);
+    }
+
+    private Path fallback(String rel) {
+        if (!rel.startsWith("assets/synthesis.worker-") || !rel.endsWith(".js")) {
+            return null;
+        }
+        Path assets = root.resolve("assets");
+        if (!Files.isDirectory(assets)) {
+            return null;
+        }
+        try (var stream = Files.list(assets)) {
+            return stream
+                    .filter(p -> p.getFileName().toString().startsWith("synthesis.worker-")
+                            && p.getFileName().toString().endsWith(".js"))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException ignored) {
+            return null;
+        }
     }
 
     static String contentType(String path) {
