@@ -1,0 +1,52 @@
+.pill {
+  position: absolute;
+  left: 16px;
+  bottom: 100px;
+  max-width: calc(100% - 248px);
+  overflow: hidden;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 48px;
+  padding: 0 18px;
+  border-radius: 24px;
+  font-size: 13px;
+  color: var(--visor-dim);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.coordItem {
+  display: flex;
+  gap: 6px;
+}
+
+.coordKey {
+  color: var(--text-muted);
+}
+
+.coordVal {
+  color: var(--visor-ink);
+  min-width: 44px;
+}
+
+.colorGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.colorSwatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--border-line);
+  background: var(--swatch-color, transparent);
+}
+
+.hexLabel {
+  color: var(--visor-ink);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}

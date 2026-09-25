@@ -10,6 +10,44 @@ import { viewToRoi } from '@/entities/viewport/math';
 import { splitBrushId } from '@/shared/proto/brush';
 import type { DeliverySink } from '@/app/providers/delivery-sink';
 import type { GazeSender } from '@/features/send-gaze';
+import {
+  TAU,
+  BG_GRID_SPACING,
+  BG_GRID_DOT_RADIUS,
+  IMAGE_SMOOTHING_THRESHOLD,
+  DOT_FADE_RAMP_FACTOR,
+  MAX_BACKGROUND_DIM,
+  PIXEL_GRID_THRESHOLD,
+  PIXEL_GRID_LINE_WIDTH,
+  FRAME_SHADOW_PADDING,
+  FRAME_SHADOW_BLUR,
+  FRAME_SHADOW_OFFSET_Y,
+  FRAME_SHADOW_MARGIN,
+  LOUPE_RADIUS,
+  LOUPE_MAGNIFICATION,
+  LOUPE_PIXEL_OUTLINE_ZOOM,
+  LOUPE_PIXEL_OUTLINE_WIDTH,
+  LOUPE_RIM_WIDTH,
+  LOUPE_BADGE_OFFSET_Y,
+  LOUPE_BADGE_HEIGHT,
+  LOUPE_BADGE_RADIUS,
+  LOADER_DOT_COUNT,
+  LOADER_SPEED,
+  LOADER_ORBIT_RADIUS,
+  LOADER_ORBIT_PULSE,
+  LOADER_DOT_BASE_RADIUS,
+} from '@/shared/config/render';
+import {
+  MIN_ZOOM_FIT_RATIO,
+  DBLCLICK_ZOOM_IN,
+  DBLCLICK_ZOOM_OUT,
+  KEY_PAN_STEP_PX,
+  ZOOM_STEP_FACTOR,
+  VELOCITY_EMA_ALPHA,
+  VELOCITY_EMA_BETA,
+  FLING_WINDOW_MS,
+} from '@/shared/config/view';
+import styles from './ViewerChrome.module.css';
 
 export interface ViewSync {
   s: number;
@@ -103,7 +141,7 @@ export function ViewerChrome(props: Props): JSX.Element {
 
     const th = (): number => (P().dotThreshold) / 100;
     const maxS = (): number => P().maxZoom;
-    const minS = (): number => st.fitS * 0.5;
+    const minS = (): number => st.fitS * MIN_ZOOM_FIT_RATIO;
 
     function resize(): void {
       const r = cv.getBoundingClientRect();
@@ -177,7 +215,7 @@ export function ViewerChrome(props: Props): JSX.Element {
 
     function bg(): void {
       if (!ctx) return;
-      const g = 26;
+      const g = BG_GRID_SPACING;
       ctx.fillStyle = '#0D0E13';
       ctx.fillRect(0, 0, W, H);
       const ox = (((st.v.tx * 0.4) % g) + g) % g;
@@ -186,8 +224,8 @@ export function ViewerChrome(props: Props): JSX.Element {
       ctx.beginPath();
       for (let y = oy - g; y < H + g; y += g) {
         for (let x = ox - g; x < W + g; x += g) {
-          ctx.moveTo(x + 1.2, y);
-          ctx.arc(x, y, 1.2, 0, 6.2832);
+          ctx.moveTo(x + BG_GRID_DOT_RADIUS, y);
+          ctx.arc(x, y, BG_GRID_DOT_RADIUS, 0, TAU);
         }
       }
       ctx.fill();
@@ -199,15 +237,15 @@ export function ViewerChrome(props: Props): JSX.Element {
       const list = brushes();
       if (list.length === 0) return;
       const dotsOn = p.dots && s >= th();
-      const f = dotsOn ? Math.min(1, (s - th()) / (th() * 0.75)) : 0;
-      ctx.imageSmoothingEnabled = s < 2;
+      const f = dotsOn ? Math.min(1, (s - th()) / (th() * DOT_FADE_RAMP_FACTOR)) : 0;
+      ctx.imageSmoothingEnabled = s < IMAGE_SMOOTHING_THRESHOLD;
       for (const b of list) {
         const dx = tx + b.x * s;
         const dy = ty + b.y * s;
         const dw = b.w * s;
         const dh = b.h * s;
         if (dx + dw < cx0 || dx > cx1 || dy + dh < cy0 || dy > cy1) continue;
-        ctx.globalAlpha = 1 - f * 0.9;
+        ctx.globalAlpha = 1 - f * MAX_BACKGROUND_DIM;
         ctx.drawImage(b.bmp, dx, dy, dw, dh);
       }
       ctx.globalAlpha = 1;
@@ -218,13 +256,13 @@ export function ViewerChrome(props: Props): JSX.Element {
           brushes: list,
           scratchCanvas: st.scratchCanvas,
         });
-      } else if (s >= 16) {
+      } else if (s >= PIXEL_GRID_THRESHOLD) {
         const x0 = Math.max(0, Math.floor((cx0 - tx) / s));
         const y0 = Math.max(0, Math.floor((cy0 - ty) / s));
         const x1 = Math.min(p.iw, Math.ceil((cx1 - tx) / s));
         const y1 = Math.min(p.ih, Math.ceil((cy1 - ty) / s));
         ctx.strokeStyle = 'rgba(13,14,19,0.35)';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = PIXEL_GRID_LINE_WIDTH;
         ctx.beginPath();
         for (let x = x0; x <= x1; x++) {
           const X = Math.round(tx + x * s) + 0.5;
@@ -248,20 +286,31 @@ export function ViewerChrome(props: Props): JSX.Element {
       bg();
       const iw = p.iw * v.s;
       const ih = p.ih * v.s;
-      if (v.tx > -40 || v.ty > -40 || v.tx + iw < W + 40 || v.ty + ih < H + 40) {
+      if (
+        v.tx > -FRAME_SHADOW_PADDING ||
+        v.ty > -FRAME_SHADOW_PADDING ||
+        v.tx + iw < W + FRAME_SHADOW_PADDING ||
+        v.ty + ih < H + FRAME_SHADOW_PADDING
+      ) {
         ctx.save();
         ctx.shadowColor = 'rgba(0,0,0,0.55)';
-        ctx.shadowBlur = 48;
-        ctx.shadowOffsetY = 12;
+        ctx.shadowBlur = FRAME_SHADOW_BLUR;
+        ctx.shadowOffsetY = FRAME_SHADOW_OFFSET_Y;
         ctx.fillStyle = '#000';
-        ctx.fillRect(Math.max(v.tx, -60), Math.max(v.ty, -60), Math.min(v.tx + iw, W + 60) - Math.max(v.tx, -60), Math.min(v.ty + ih, H + 60) - Math.max(v.ty, -60));
+        const m = FRAME_SHADOW_MARGIN;
+        ctx.fillRect(
+          Math.max(v.tx, -m),
+          Math.max(v.ty, -m),
+          Math.min(v.tx + iw, W + m) - Math.max(v.tx, -m),
+          Math.min(v.ty + ih, H + m) - Math.max(v.ty, -m),
+        );
         ctx.restore();
       }
       layer(v.tx, v.ty, v.s, 0, 0, W, H);
       if (p.loupe && st.mouse && !dragging) {
         const { mx, my } = st.mouse;
-        const R = 104;
-        const L = Math.min(v.s * 4, maxS() * 4);
+        const R = LOUPE_RADIUS;
+        const L = Math.min(v.s * LOUPE_MAGNIFICATION, maxS() * LOUPE_MAGNIFICATION);
         const ix = (mx - v.tx) / v.s;
         const iy = (my - v.ty) / v.s;
         if (ix >= 0 && iy >= 0 && ix <= p.iw && iy <= p.ih) {
@@ -271,39 +320,39 @@ export function ViewerChrome(props: Props): JSX.Element {
           ctx.shadowColor = 'rgba(0,0,0,0.6)';
           ctx.shadowBlur = 28;
           ctx.beginPath();
-          ctx.arc(mx, my, R, 0, 6.2832);
+          ctx.arc(mx, my, R, 0, TAU);
           ctx.fillStyle = '#0D0E13';
           ctx.fill();
           ctx.shadowColor = 'transparent';
           ctx.clip();
           layer(ltx, lty, L, mx - R, my - R, mx + R, my + R);
-          if (L >= 6) {
+          if (L >= LOUPE_PIXEL_OUTLINE_ZOOM) {
             const px = Math.floor(ix);
             const py = Math.floor(iy);
             ctx.strokeStyle = '#FFFFFF';
-            ctx.lineWidth = 2;
+            ctx.lineWidth = LOUPE_PIXEL_OUTLINE_WIDTH;
             ctx.strokeRect(ltx + px * L, lty + py * L, L, L);
           }
           ctx.restore();
-          ctx.lineWidth = 5;
+          ctx.lineWidth = LOUPE_RIM_WIDTH;
           ctx.strokeStyle = '#B8C4FF';
           ctx.beginPath();
-          ctx.arc(mx, my, R, 0, 6.2832);
+          ctx.arc(mx, my, R, 0, TAU);
           ctx.stroke();
 
-          const label = '×4 · ' + (L * 100 < 1000 ? Math.round(L * 100) : Math.round(L * 100).toLocaleString('en-US')) + '%';
+          const label = `×${LOUPE_MAGNIFICATION} · ` + (L * 100 < 1000 ? Math.round(L * 100) : Math.round(L * 100).toLocaleString('en-US')) + '%';
           ctx.font = '600 12px "Roboto Flex", system-ui, sans-serif';
           const tw = ctx.measureText(label).width + 20;
-          const by = my + R + 10;
+          const by = my + R + LOUPE_BADGE_OFFSET_Y;
           ctx.fillStyle = '#B8C4FF';
           ctx.beginPath();
-          if (ctx.roundRect) ctx.roundRect(mx - tw / 2, by, tw, 24, 12);
-          else ctx.rect(mx - tw / 2, by, tw, 24);
+          if (ctx.roundRect) ctx.roundRect(mx - tw / 2, by, tw, LOUPE_BADGE_HEIGHT, LOUPE_BADGE_RADIUS);
+          else ctx.rect(mx - tw / 2, by, tw, LOUPE_BADGE_HEIGHT);
           ctx.fill();
           ctx.fillStyle = '#1F2D6F';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(label, mx, by + 12);
+          ctx.fillText(label, mx, by + LOUPE_BADGE_HEIGHT / 2);
         }
       }
     }
@@ -314,12 +363,13 @@ export function ViewerChrome(props: Props): JSX.Element {
       bg();
       const t = performance.now() / 1000;
       const cols = ['#B8C4FF', '#FF8A5B', '#DDE1F9', '#FFB599'];
-      for (let i = 0; i < 10; i++) {
-        const a = t * 1.6 + i * 0.628;
-        const R = 24 + 4 * Math.sin(t * 3 + i);
+      for (let i = 0; i < LOADER_DOT_COUNT; i++) {
+        const a = t * LOADER_SPEED + i * (TAU / LOADER_DOT_COUNT);
+        const R = LOADER_ORBIT_RADIUS + LOADER_ORBIT_PULSE * Math.sin(t * 3 + i);
         ctx.fillStyle = cols[i % 4] ?? '#B8C4FF';
         ctx.beginPath();
-        ctx.arc(W / 2 + Math.cos(a) * R, H / 2 + Math.sin(a) * R, 2.5 + 2.5 * (0.5 + 0.5 * Math.sin(t * 4 - i * 0.7)), 0, 6.2832);
+        const rDot = LOADER_DOT_BASE_RADIUS + LOADER_DOT_BASE_RADIUS * (0.5 + 0.5 * Math.sin(t * 4 - i * 0.7));
+        ctx.arc(W / 2 + Math.cos(a) * R, H / 2 + Math.sin(a) * R, rDot, 0, TAU);
         ctx.fill();
       }
     }
@@ -418,7 +468,10 @@ export function ViewerChrome(props: Props): JSX.Element {
           const dt = Math.max(1, now - last.t);
           const dx = e.clientX - last.x;
           const dy = e.clientY - last.y;
-          vel = { x: 0.8 * dx / dt + 0.2 * vel.x, y: 0.8 * dy / dt + 0.2 * vel.y };
+          vel = {
+            x: VELOCITY_EMA_ALPHA * dx / dt + VELOCITY_EMA_BETA * vel.x,
+            y: VELOCITY_EMA_ALPHA * dy / dt + VELOCITY_EMA_BETA * vel.y,
+          };
           st.v = panBy(v, dx, dy);
           last = { x: e.clientX, y: e.clientY, t: now };
           userMoved = true;
@@ -431,7 +484,7 @@ export function ViewerChrome(props: Props): JSX.Element {
       ptrs.delete(e.pointerId);
       if (ptrs.size === 0 && dragging) {
         dragging = false;
-        if (performance.now() - last.t < 60) st.v = flingTarget(st.v, vel.x, vel.y);
+        if (performance.now() - last.t < FLING_WINDOW_MS) st.v = flingTarget(st.v, vel.x, vel.y);
       } else if (ptrs.size === 1) {
         const [q] = [...ptrs.values()];
         if (q) last = { x: q.x, y: q.y, t: performance.now() };
@@ -450,7 +503,7 @@ export function ViewerChrome(props: Props): JSX.Element {
 
     function onDbl(e: MouseEvent): void {
       const r = cv.getBoundingClientRect();
-      zoomTo(st.v.ts * (e.shiftKey ? 0.5 : 2.5), e.clientX - r.left, e.clientY - r.top);
+      zoomTo(st.v.ts * (e.shiftKey ? DBLCLICK_ZOOM_OUT : DBLCLICK_ZOOM_IN), e.clientX - r.left, e.clientY - r.top);
     }
 
     function onKey(e: KeyboardEvent): void {
@@ -460,21 +513,21 @@ export function ViewerChrome(props: Props): JSX.Element {
       if (t && /INPUT|TEXTAREA/.test(t.tagName)) return;
       const k = e.key;
       let hit = true;
-      if (k === '+' || k === '=') zoomTo(v.ts * 1.6);
-      else if (k === '-' || k === '_') zoomTo(v.ts / 1.6);
+      if (k === '+' || k === '=') zoomTo(v.ts * ZOOM_STEP_FACTOR);
+      else if (k === '-' || k === '_') zoomTo(v.ts / ZOOM_STEP_FACTOR);
       else if (k === '0') doFit(false);
       else if (k === '1') zoomTo(1);
       else if (k === 'ArrowLeft') {
-        st.v = { ...v, ttx: v.ttx + 180 };
+        st.v = { ...v, ttx: v.ttx + KEY_PAN_STEP_PX };
         dirty = true;
       } else if (k === 'ArrowRight') {
-        st.v = { ...v, ttx: v.ttx - 180 };
+        st.v = { ...v, ttx: v.ttx - KEY_PAN_STEP_PX };
         dirty = true;
       } else if (k === 'ArrowUp') {
-        st.v = { ...v, tty: v.tty + 180 };
+        st.v = { ...v, tty: v.tty + KEY_PAN_STEP_PX };
         dirty = true;
       } else if (k === 'ArrowDown') {
-        st.v = { ...v, tty: v.tty - 180 };
+        st.v = { ...v, tty: v.tty - KEY_PAN_STEP_PX };
         dirty = true;
       } else if (k === 'l' || k === 'L') a.onToggleLoupe();
       else if (k === 'p' || k === 'P') a.onToggleDots();
@@ -523,7 +576,7 @@ export function ViewerChrome(props: Props): JSX.Element {
   return (
     <canvas
       ref={canvasRef}
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', display: 'block', touchAction: 'none', cursor: props.loupe ? 'crosshair' : 'grab' }}
+      className={`${styles.canvas} ${props.loupe ? styles.cursorCrosshair : styles.cursorGrab}`}
     />
   );
 }

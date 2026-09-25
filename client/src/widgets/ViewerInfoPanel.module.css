@@ -1,0 +1,99 @@
+.panel {
+  position: absolute;
+  top: 88px;
+  right: 16px;
+  bottom: 284px;
+  width: 320px;
+  maxWidth: calc(100% - 32px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 28px;
+  background: var(--surface-panel);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 22px;
+  font-weight: 700;
+  font-variation-settings: 'wdth' 115;
+}
+
+.closeButton {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background: var(--surface-subtle);
+  color: var(--visor-ink);
+}
+
+.rowsList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.keyLabel {
+  color: var(--text-muted);
+}
+
+.valLabel {
+  color: var(--visor-ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-dim);
+}
+
+.shortcutsList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--pill);
+}
+
+.shortcutRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.shortcutAction {
+  color: var(--visor-dim);
+}
+
+.keyBadge {
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: var(--surface-subtle);
+  color: var(--visor-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
