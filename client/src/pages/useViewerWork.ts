@@ -11,9 +11,11 @@ export function useViewerWork(id: string, seurat: SeuratState) {
   const [attempt, setAttempt] = useState(0);
   const gazeInit = useRef(false);
 
-  const idx = Math.max(0, seurat.works.findIndex((w) => w.id === id));
-  const work = seurat.works[idx] ?? seurat.works[0];
-  const n = seurat.works.length;
+  const viewable = seurat.works.filter((w) => w.state === 1 || w.state === 3);
+  const list = viewable.length > 0 ? viewable : seurat.works;
+  const idx = Math.max(0, list.findIndex((w) => w.id === id));
+  const work = seurat.works.find((w) => w.id === id) ?? list[idx] ?? seurat.works[0];
+  const n = list.length;
 
   useEffect(() => {
     gazeInit.current = false;

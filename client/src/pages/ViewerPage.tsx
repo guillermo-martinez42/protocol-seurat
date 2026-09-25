@@ -36,9 +36,11 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
   const fitPct = view?.fitPct ?? 100;
   const inDots = view?.inDots ?? false;
 
+  const effectiveMaxZoom = Math.max(VIEWER_MAX_ZOOM, Math.ceil((fitPct / 100) * 4));
+
   const presets = useMemo(
-    () => buildPresets(pct, fitPct, VIEWER_MAX_ZOOM, POINTILLIST_ZOOM_THRESHOLD_PCT / 100),
-    [pct, fitPct],
+    () => buildPresets(pct, fitPct, effectiveMaxZoom, POINTILLIST_ZOOM_THRESHOLD_PCT / 100),
+    [pct, fitPct, effectiveMaxZoom],
   );
   const workTag = seurat.works[idx]?.tag;
   const rows = useMemo(
@@ -70,7 +72,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         loupe={ui.loupe}
         dots={ui.dots}
         dotThreshold={POINTILLIST_ZOOM_THRESHOLD_PCT}
-        maxZoom={VIEWER_MAX_ZOOM}
+        maxZoom={effectiveMaxZoom}
         apiRef={api}
         actions={{
           onToggleLoupe: () => patchUi({ loupe: !ui.loupe }),

@@ -310,7 +310,12 @@ export function ViewerChrome(props: Props): JSX.Element {
         );
         ctx.restore();
       }
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(v.tx, v.ty, iw, ih);
+      ctx.clip();
       layer(v.tx, v.ty, v.s, 0, 0, W, H);
+      ctx.restore();
       if (p.loupe && st.mouse && !dragging) {
         const { mx, my } = st.mouse;
         const R = LOUPE_RADIUS;
@@ -328,6 +333,9 @@ export function ViewerChrome(props: Props): JSX.Element {
           ctx.fillStyle = '#0D0E13';
           ctx.fill();
           ctx.shadowColor = 'transparent';
+          ctx.clip();
+          ctx.beginPath();
+          ctx.rect(ltx, lty, p.iw * L, p.ih * L);
           ctx.clip();
           layer(ltx, lty, L, mx - R, my - R, mx + R, my + R);
           if (L >= LOUPE_PIXEL_OUTLINE_ZOOM) {

@@ -77,21 +77,25 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
     y0 = clamp(y0, 0, h);
     const cx1 = clamp(x1, 0, w);
     const cy1 = clamp(y1, 0, h);
-    if (x0 <= 0.5 && y0 <= 0.5 && cx1 >= w - 0.5 && cy1 >= h - 0.5) return;
+    const isFull = x0 <= 0.5 && y0 <= 0.5 && cx1 >= w - 0.5 && cy1 >= h - 0.5;
 
-    c.fillStyle = 'rgba(13,14,19,0.6)';
-    c.beginPath();
-    c.rect(0, 0, w, h);
-    c.rect(x0, y0, cx1 - x0, cy1 - y0);
-    c.fill('evenodd');
+    if (!isFull) {
+      c.fillStyle = 'rgba(13,14,19,0.6)';
+      c.beginPath();
+      c.rect(0, 0, w, h);
+      c.rect(x0, y0, cx1 - x0, cy1 - y0);
+      c.fill('evenodd');
+    }
 
-    const rw = Math.max(4, cx1 - x0);
-    const rh = Math.max(4, cy1 - y0);
+    const rx = isFull ? 0.5 : x0;
+    const ry = isFull ? 0.5 : y0;
+    const rw = isFull ? w - 1 : Math.max(4, cx1 - x0);
+    const rh = isFull ? h - 1 : Math.max(4, cy1 - y0);
     c.strokeStyle = '#B8C4FF';
     c.lineWidth = 2;
     c.beginPath();
-    if (c.roundRect) c.roundRect(x0, y0, rw, rh, 3);
-    else c.rect(x0, y0, rw, rh);
+    if (c.roundRect) c.roundRect(rx, ry, rw, rh, 3);
+    else c.rect(rx, ry, rw, rh);
     c.stroke();
   }, [view, iw, ih, sink, paintTick]);
 
