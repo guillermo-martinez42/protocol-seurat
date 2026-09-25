@@ -3,8 +3,8 @@ import { hash3 } from '@/shared/lib/hash3';
 import { clamp } from '@/shared/lib/clamp';
 import { Icon } from '@/shared/ui/Icon';
 import { useWorkPreview } from '@/entities/work';
-
-const CELL = 11;
+import { HERO_GRID_CELL as CELL, TAU } from '@/shared/config/render';
+import styles from './GalleryHero.module.css';
 
 export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; featuredWorkId?: string }): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -61,7 +61,7 @@ export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; fe
             (x + 0.5 + (h1 - 0.5) * 0.35) * CELL,
             (y + 0.5 + (h2 - 0.5) * 0.35) * CELL,
             Math.max(0, CELL * (0.26 + 0.2 * h3) * e),
-            0, 6.2832,
+            0, TAU,
           );
           ctx.fill();
         }
@@ -76,22 +76,19 @@ export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; fe
   }, [preview]);
 
   return (
-    <section
-      onClick={onOpen}
-      style={{ position: 'relative', overflow: 'hidden', borderRadius: 48, background: '#DDE1FF', minHeight: 420, display: 'flex', alignItems: 'flex-end', cursor: 'zoom-in' }}
-    >
-      <canvas ref={ref} style={{ position: 'absolute', top: 0, right: 0, width: '70%', height: '100%', display: 'block', maskImage: 'linear-gradient(to right,transparent 0%,#000 42%)', WebkitMaskImage: 'linear-gradient(to right,transparent 0%,#000 42%)' }} />
-      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 22, padding: 56, maxWidth: 660 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 14px 0 10px', borderRadius: 16, background: '#FBF8FF', color: '#00105C', fontSize: 14, fontWeight: 600 }}>
+    <section onClick={onOpen} className={styles.heroCard}>
+      <canvas ref={ref} className={styles.canvas} />
+      <div className={styles.content}>
+        <span className={styles.badge}>
           <Icon name="blur_on" size={20} />Deep zoom viewer
         </span>
-        <h1 style={{ margin: 0, fontSize: 'clamp(60px,9vw,128px)', lineHeight: 0.9, fontWeight: 800, fontVariationSettings: "'wdth' 118, 'opsz' 144", letterSpacing: '-0.04em', color: '#00105C' }}>Look closer.</h1>
-        <p style={{ margin: 0, maxWidth: 440, fontSize: 18, lineHeight: 1.5, color: '#2A2F52' }}>Built for massive images. Scroll to zoom, drag to pan — keep zooming in and every pixel becomes a dot.</p>
+        <h1 className={styles.title}>Look closer.</h1>
+        <p className={styles.description}>Built for massive images. Scroll to zoom, drag to pan — keep zooming in and every pixel becomes a dot.</p>
         <button className="hero-btn">
           Open Plate 01<Icon name="arrow_forward" size={22} />
         </button>
       </div>
-      <span style={{ position: 'absolute', right: 24, bottom: 24, display: 'flex', alignItems: 'center', height: 32, padding: '0 14px', borderRadius: 16, background: 'rgba(251,248,255,0.92)', color: '#1A1B21', fontSize: 13, fontWeight: 500 }}>Plate 01 · one dot per sampled pixel</span>
+      <span className={styles.captionChip}>Plate 01 · one dot per sampled pixel</span>
     </section>
   );
 }
