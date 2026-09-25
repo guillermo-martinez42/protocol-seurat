@@ -1,5 +1,6 @@
 package seurat.ingest;
 
+import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -15,12 +16,12 @@ final class Drain {
     private final Accumulator[] acc;
     private final FileBrushStore store;
     private final ExecutorService pool;
-    private final List<Future<?>> tasks;
+    private final Deque<Future<?>> tasks;
     private final List<short[][]> seed;
     private final int[] drainCounts;
 
     Drain(int stratum, int top, Accumulator[] acc, FileBrushStore store,
-            ExecutorService pool, List<Future<?>> tasks, List<short[][]> seed,
+            ExecutorService pool, Deque<Future<?>> tasks, List<short[][]> seed,
             int[] drainCounts) {
         this.stratum = stratum;
         this.top = top;
@@ -36,17 +37,11 @@ final class Drain {
         Accumulator a = acc[stratum];
         int w2 = a.width / 2;
         int[][] ps = new int[3][128 * w2];
-        int[][][] hd = new int[3][1][128 * w2];
-        int[][][] vd = new int[3][1][128 * w2];
-        int[][][] dd = new int[3][1][128 * w2];
+        int[][] hd = new int[3][128 * w2];
+        int[][] vd = new int[3][128 * w2];
+        int[][] dd = new int[3][128 * w2];
         for (int c = 0; c < 3; c++) {
-            int[] h = new int[128 * w2];
-            int[] v = new int[128 * w2];
-            int[] d = new int[128 * w2];
-            TransformS.blockForward(a.plane[c], a.width, 256, ps[c], v, h, d);
-            hd[c][0] = h;
-            vd[c][0] = v;
-            dd[c][0] = d;
+            TransformS.blockForward(a.plane[c], a.width, 256, ps[c], vd[c], hd[c], dd[c]);
         }
         int nx = (a.width + 255) / 256;
         int by = drainCounts[stratum]++;
@@ -56,7 +51,7 @@ final class Drain {
         final int row = by;
         for (int bx = 0; bx < nx; bx++) {
             final int col = bx;
-            tasks.add(pool.submit(() -> {
+            tasks.addLast(pool.submit(() -> {
                 int[][] pw = Window.parents(ps, w2, col);
                 int[][][] hw = Window.details(hd, w2, col);
                 int[][][] vw = Window.details(vd, w2, col);
@@ -73,10 +68,10 @@ final class Drain {
 
     private static final int MAX_TASKS = Math.max(64, Runtime.getRuntime().availableProcessors() * 8);
 
-    private static void throttle(List<Future<?>> tasks) {
+    private static void throttle(Deque<Future<?>> tasks) {
         while (tasks.size() >= MAX_TASKS) {
             try {
-                tasks.remove(0).get();
+                tasks.pollFirst().get();
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
@@ -101,15 +96,7 @@ final class Drain {
             if (up.full()) {
                 new Drain(stratum + 1, top, acc, store, pool, tasks, seed, drainCounts).drain();
             }
-            int[] yy = new int[w2];
-            int[] co = new int[w2];
-            int[] cg = new int[w2];
-            for (int x = 0; x < w2; x++) {
-                yy[x] = ps[0][y * w2 + x];
-                co[x] = ps[1][y * w2 + x];
-                cg[x] = ps[2][y * w2 + x];
-            }
-            up.addRow(up.rows, yy, co, cg, w2);
+            up.addRowDirect(ps[0], ps[1], ps[2], y * w2, w2);
         }
     }
 }

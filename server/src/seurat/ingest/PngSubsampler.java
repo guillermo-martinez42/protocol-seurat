@@ -42,20 +42,24 @@ final class PngSubsampler {
             byte[] prev = new byte[w * bp];
             int rowBytes = w * bp;
             var inf = new java.util.zip.Inflater();
-            DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536));
-            for (int y = 0; y < h; y++) {
-                int filter = sl.readUnsignedByte();
-                sl.readFully(cur);
-                PngUnfilter.unfilter(filter, cur, prev, bp, rowBytes);
-                if (y % q == 0) {
-                    int sy = y / q;
-                    sampleRow(cur, e, sy, sw, q, ct, bp);
+            try {
+                DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536));
+                for (int y = 0; y < h; y++) {
+                    int filter = sl.readUnsignedByte();
+                    sl.readFully(cur);
+                    PngUnfilter.unfilter(filter, cur, prev, bp, rowBytes);
+                    if (y % q == 0) {
+                        int sy = y / q;
+                        sampleRow(cur, e, sy, sw, q, ct, bp);
+                    }
+                    byte[] tmp = prev;
+                    prev = cur;
+                    cur = tmp;
                 }
-                byte[] tmp = prev;
-                prev = cur;
-                cur = tmp;
+                return new Subsampled(e, sw, sh);
+            } finally {
+                inf.end();
             }
-            return new Subsampled(e, sw, sh);
         } catch (Exception ex) {
             return null;
         }

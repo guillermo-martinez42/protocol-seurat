@@ -24,6 +24,7 @@ public final class PngReader implements MasterReader {
     private final int colorType;
     private final boolean streaming;
     private final DataInputStream scanlines;
+    private final java.util.zip.Inflater inf;
     private final InputStream rawStream;
     private final ImageReader fallbackReader;
     private final ImageInputStream fallbackInput;
@@ -41,6 +42,7 @@ public final class PngReader implements MasterReader {
             this.colorType = hdr.ct;
             this.rawStream = hdr.is;
             this.scanlines = hdr.sl;
+            this.inf = hdr.inf;
             this.curRow = new byte[hdr.w * hdr.bp];
             this.prevRow = new byte[hdr.w * hdr.bp];
             this.fallbackReader = null;
@@ -49,6 +51,7 @@ public final class PngReader implements MasterReader {
             this.streaming = false;
             this.rawStream = null;
             this.scanlines = null;
+            this.inf = null;
             this.bpp = 0;
             this.colorType = 0;
             this.fallbackInput = ImageIO.createImageInputStream(source.toFile());
@@ -61,7 +64,8 @@ public final class PngReader implements MasterReader {
         }
     }
 
-    private record StreamHeader(int w, int h, int bp, int ct, InputStream is, DataInputStream sl) {}
+    private record StreamHeader(int w, int h, int bp, int ct, InputStream is,
+            DataInputStream sl, java.util.zip.Inflater inf) {}
 
     private static StreamHeader tryStream(Path source) {
         try {
@@ -73,13 +77,10 @@ public final class PngReader implements MasterReader {
                 is.close();
                 return null;
             }
-            int w = dis.readInt();
-            int h = dis.readInt();
-            int depth = dis.readByte();
-            int ct = dis.readByte();
+            int w = dis.readInt(), h = dis.readInt();
+            int depth = dis.readByte(), ct = dis.readByte();
             dis.readByte(); dis.readByte();
-            int interlace = dis.readByte();
-            dis.readInt();
+            int interlace = dis.readByte(); dis.readInt();
             if (depth != 8 || (ct != 0 && ct != 2 && ct != 6) || interlace != 0) {
                 is.close();
                 return null;
@@ -87,7 +88,7 @@ public final class PngReader implements MasterReader {
             int bp = ct == 6 ? 4 : (ct == 2 ? 3 : 1);
             var inf = new java.util.zip.Inflater();
             DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536));
-            return new StreamHeader(w, h, bp, ct, is, sl);
+            return new StreamHeader(w, h, bp, ct, is, sl, inf);
         } catch (Exception ex) {
             return null;
         }
@@ -138,6 +139,8 @@ public final class PngReader implements MasterReader {
 
     @Override
     public void close() throws IOException {
+        if (scanlines != null) scanlines.close();
+        if (inf != null) inf.end();
         if (rawStream != null) rawStream.close();
         if (fallbackReader != null) fallbackReader.dispose();
         if (fallbackInput != null) fallbackInput.close();

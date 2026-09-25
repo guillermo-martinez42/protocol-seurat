@@ -46,7 +46,7 @@ final class ImagePass {
         List<short[][]> seed = new ArrayList<>();
         ExecutorService pool = Executors.newFixedThreadPool(
                 Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
-        List<Future<?>> tasks = new ArrayList<>();
+        java.util.ArrayDeque<Future<?>> tasks = new java.util.ArrayDeque<>();
         int[] drainCounts = new int[top];
         int[][] yuv = new int[3][paddedW];
         int row = 0;
@@ -71,7 +71,7 @@ final class ImagePass {
             }
         }
         for (int stratum = 0; stratum < top; stratum++) {
-            replicate(acc[stratum]);
+            acc[stratum].replicate();
             if (acc[stratum].rows > 0) {
                 new Drain(stratum, top, acc, store, pool, tasks, seed, drainCounts).drain();
             }
@@ -102,30 +102,13 @@ final class ImagePass {
     }
 
     private int feed(Accumulator[] acc, int[][] yuv, int paddedW, int row,
-            ExecutorService pool, List<Future<?>> tasks, List<short[][]> seed,
+            ExecutorService pool, java.util.Deque<Future<?>> tasks, List<short[][]> seed,
             int[] drainCounts) {
         acc[0].addRow(row % 256, yuv[0], yuv[1], yuv[2], paddedW);
         if (acc[0].full()) {
             new Drain(0, top, acc, store, pool, tasks, seed, drainCounts).drain();
         }
         return row + 1;
-    }
-
-    /** Border-replicate the last row until the accumulator holds 256 rows. */
-    private static void replicate(Accumulator acc) {
-        while (acc.rows > 0 && acc.rows < 256) {
-            int y = acc.rows;
-            int src = y - 1;
-            int[] yy = new int[acc.width];
-            int[] co = new int[acc.width];
-            int[] cg = new int[acc.width];
-            for (int x = 0; x < acc.width; x++) {
-                yy[x] = acc.plane[0][src][x];
-                co[x] = acc.plane[1][src][x];
-                cg[x] = acc.plane[2][src][x];
-            }
-            acc.addRow(y, yy, co, cg, acc.width);
-        }
     }
 
     private void writeSeed(List<short[][]> seed, int seedW, int seedH) throws Exception {

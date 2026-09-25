@@ -20,6 +20,10 @@ public final class Bands {
 
     private static final ThreadLocal<Deflater> DEFLATERS =
             ThreadLocal.withInitial(() -> new Deflater(seurat.config.SeuratConstants.DEFLATE_LEVEL, true));
+    private static final ThreadLocal<byte[]> RAW_BUFS =
+            ThreadLocal.withInitial(() -> new byte[512 * 1024]);
+    private static final ThreadLocal<byte[]> COMP_BUFS =
+            ThreadLocal.withInitial(() -> new byte[512 * 1024]);
 
     /** Order of parents: E desc, morton asc. Returns rank per parent index. */
     public static int[] order(int[] energy, int n) {
@@ -42,7 +46,8 @@ public final class Bands {
     /** Packs one band. vals[channel][detail][sweepPos] sparse via members bitmap. */
     public static byte[] pack(int[] members, int[][][] vals) {
         int n = members.length;
-        ByteBuffer b = ByteBuffer.allocate(8 + n / 8 + vals.length * vals[0].length * n * 3);
+        byte[] raw = RAW_BUFS.get();
+        int pos = 0;
         for (int i = 0; i < n; i += 8) {
             int by = 0;
             for (int k = 0; k < 8 && i + k < n; k++) {
@@ -50,22 +55,33 @@ public final class Bands {
                     by |= 1 << k;
                 }
             }
-            b.put((byte) by);
+            raw[pos++] = (byte) by;
         }
         for (int[][] ch : vals) {
             for (int[] det : ch) {
                 for (int i = 0; i < n; i++) {
                     if (members[i] != 0) {
-                        Leb128.putU(b, Leb128.zigzagEncode(det[i]));
+                        int v = (det[i] << 1) ^ (det[i] >> 31);
+                        while ((v & ~0x7F) != 0) {
+                            raw[pos++] = (byte) ((v & 0x7F) | 0x80);
+                            v >>>= 7;
+                        }
+                        raw[pos++] = (byte) v;
                     }
                 }
             }
         }
         Deflater d = DEFLATERS.get();
         d.reset();
-        d.setInput(b.array(), 0, b.position());
+        d.setInput(raw, 0, pos);
         d.finish();
-        ByteArrayOutputStream out = new ByteArrayOutputStream(b.position());
+        byte[] comp = COMP_BUFS.get();
+        int len = d.deflate(comp);
+        if (d.finished()) {
+            return Arrays.copyOf(comp, len);
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream(pos);
+        out.write(comp, 0, len);
         byte[] tmp = new byte[8192];
         while (!d.finished()) {
             out.write(tmp, 0, d.deflate(tmp));

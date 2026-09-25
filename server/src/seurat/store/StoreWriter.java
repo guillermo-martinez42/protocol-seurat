@@ -15,6 +15,8 @@ final class StoreWriter {
     private final int[] nx;
     private FileChannel[] pincChannels;
     private FileChannel[] idxChannels;
+    private long[] pincSizes;
+    private final ByteBuffer idxBuf = ByteBuffer.allocate(IndexEntry.BYTES);
 
     StoreWriter(Path dir, int[] nx) {
         this.dir = dir;
@@ -31,17 +33,16 @@ final class StoreWriter {
             }
             long max = 0;
             try (FileChannel ch = FileChannel.open(pi, StandardOpenOption.READ)) {
-                ByteBuffer b = ByteBuffer.allocate(IndexEntry.BYTES);
-                while (true) {
-                    b.clear();
-                    if (ch.read(b) < IndexEntry.BYTES) {
-                        break;
-                    }
+                ByteBuffer b = ByteBuffer.allocate(64 * 1024);
+                while (ch.read(b) > 0) {
                     b.flip();
-                    IndexEntry e = IndexEntry.decode(b);
-                    if (!e.isMissing()) {
-                        max = Math.max(max, e.offset() + e.ends()[3]);
+                    while (b.remaining() >= IndexEntry.BYTES) {
+                        IndexEntry e = IndexEntry.decode(b);
+                        if (!e.isMissing()) {
+                            max = Math.max(max, e.offset() + e.ends()[3]);
+                        }
                     }
+                    b.compact();
                 }
             }
             try (FileChannel ch = FileChannel.open(pp, StandardOpenOption.WRITE)) {
@@ -56,11 +57,15 @@ final class StoreWriter {
         if (pincChannels == null) {
             pincChannels = new FileChannel[nx.length];
             idxChannels = new FileChannel[nx.length];
+            pincSizes = new long[nx.length];
         }
         if (pincChannels[stratum] == null) {
-            pincChannels[stratum] = FileChannel.open(dir.resolve("E" + stratum + ".pinc"),
+            FileChannel pinc = FileChannel.open(dir.resolve("E" + stratum + ".pinc"),
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                     StandardOpenOption.READ);
+            pincSizes[stratum] = pinc.size();
+            pinc.position(pincSizes[stratum]);
+            pincChannels[stratum] = pinc;
             idxChannels[stratum] = FileChannel.open(dir.resolve("E" + stratum + ".idx"),
                     StandardOpenOption.CREATE, StandardOpenOption.WRITE,
                     StandardOpenOption.READ);
@@ -71,20 +76,34 @@ final class StoreWriter {
             long[] crcs) throws IOException {
         channels(stratum);
         long slot = (long) by * nx[stratum] + bx;
-        long off = pincChannels[stratum].size();
+        long off = pincSizes[stratum];
         long[] ends = new long[4];
         long acc = 0;
-        for (int i = 0; i < 4; i++) {
-            byte[] band = i < bands.length ? bands[i] : null;
-            if (band != null) {
-                pincChannels[stratum].write(ByteBuffer.wrap(band), off + acc);
+        ByteBuffer[] bufs = new ByteBuffer[bands.length];
+        for (int i = 0; i < bands.length; i++) {
+            byte[] band = bands[i];
+            if (band != null && band.length > 0) {
+                bufs[i] = ByteBuffer.wrap(band);
                 acc += band.length;
+            } else {
+                bufs[i] = ByteBuffer.allocate(0);
             }
             ends[i] = acc;
         }
+        pincChannels[stratum].write(bufs, 0, bufs.length);
+        pincSizes[stratum] = off + acc;
+
         long at = slot * IndexEntry.BYTES;
-        idxChannels[stratum].write(
-                ByteBuffer.wrap(new IndexEntry(off, ends, crcs).encode()), at);
+        idxBuf.clear();
+        idxBuf.putLong(off);
+        for (int i = 0; i < 4; i++) {
+            idxBuf.putInt((int) ends[i]);
+        }
+        for (int i = 0; i < 4; i++) {
+            idxBuf.putInt((int) (i < crcs.length ? crcs[i] : 0));
+        }
+        idxBuf.flip();
+        idxChannels[stratum].write(idxBuf, at);
     }
 
     synchronized void close() throws IOException {

@@ -5,12 +5,7 @@ public final class Quant {
     private Quant() {}
 
     public static int quantize(int x, int q) {
-        if (q <= 0) {
-            return 0;
-        }
-        int a = Math.abs(x);
-        int i = a / q;
-        return x < 0 ? -i : i;
+        return q <= 0 ? 0 : x / q;
     }
 
     public static int dequantize(int i, int q) {
