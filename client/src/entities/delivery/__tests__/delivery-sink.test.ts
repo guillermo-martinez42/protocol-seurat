@@ -7,27 +7,27 @@ import { makeBrushId } from '@/shared/proto/brush';
 import type { SessionClient } from '@/app/providers/session-client';
 
 function fakeClient() {
-  const sentSoltar: Array<{ handle: number; reason: number; ranges: number[] }> = [];
-  const sentRaspado: Array<{ handle: number; order: number; epoch: number; through: number; raspadas: number; liberadasKib: number; conservadas: number[] }> = [];
-  const sentRecibo: Array<{ handle: number; completed: number[]; queueMs: number; libre: number; renewThrough: number }> = [];
-  const sentInventario: Array<{ handle: number; order: number; through: number; brushCount: number; kib: number; ranges: number[] }> = [];
+  const sentRelease: Array<{ handle: number; reason: number; ranges: number[] }> = [];
+  const sentScraped: Array<{ handle: number; order: number; epoch: number; through: number; scrapedCount: number; freedKib: number; kept: number[] }> = [];
+  const sentReceipt: Array<{ handle: number; completed: number[]; queueMs: number; free: number; renewThrough: number }> = [];
+  const sentInventory: Array<{ handle: number; order: number; through: number; brushCount: number; kib: number; ranges: number[] }> = [];
 
   const c = {
-    sentSoltar,
-    sentRaspado,
-    sentRecibo,
-    sentInventario,
-    sendSoltar(handle: number, reason: number, ranges: number[]) {
-      sentSoltar.push({ handle, reason, ranges });
+    sentRelease,
+    sentScraped,
+    sentReceipt,
+    sentInventory,
+    sendRelease(handle: number, reason: number, ranges: number[]) {
+      sentRelease.push({ handle, reason, ranges });
     },
-    sendRaspado(handle: number, order: number, epoch: number, through: number, raspadas: number, liberadasKib: number, conservadas: number[]) {
-      sentRaspado.push({ handle, order, epoch, through, raspadas, liberadasKib, conservadas });
+    sendScraped(handle: number, order: number, epoch: number, through: number, scrapedCount: number, freedKib: number, kept: number[]) {
+      sentScraped.push({ handle, order, epoch, through, scrapedCount, freedKib, kept });
     },
-    sendRecibo(handle: number, completed: number[], queueMs: number, libre: number, renewThrough: number) {
-      sentRecibo.push({ handle, completed, queueMs, libre, renewThrough });
+    sendReceipt(handle: number, completed: number[], queueMs: number, free: number, renewThrough: number) {
+      sentReceipt.push({ handle, completed, queueMs, free, renewThrough });
     },
     sendInventory(handle: number, order: number, through: number, brushCount: number, kib: number, ranges: number[]) {
-      sentInventario.push({ handle, order, through, brushCount, kib, ranges });
+      sentInventory.push({ handle, order, through, brushCount, kib, ranges });
     },
   };
   return c as unknown as SessionClient & typeof c;
@@ -84,7 +84,7 @@ describe('DeliverySink', () => {
     });
     sink.ingest(bytes, () => 1000, () => {}, 120);
     expect(sink.book.byDelivery.size).toBe(0);
-    expect(client.sentSoltar).toEqual([{ handle: 1, reason: 6, ranges: [10] }]);
+    expect(client.sentRelease).toEqual([{ handle: 1, reason: 6, ranges: [10] }]);
     sink.dispose();
   });
 
@@ -108,7 +108,7 @@ describe('DeliverySink', () => {
     expect(sink.matchesScrape(recE1, 1, new Uint8Array([2]))).toBe(true);
     expect(sink.matchesScrape(recE1, 1, new Uint8Array([1]))).toBe(false);
 
-    // Predicate 3: BANDAS (drop if stratum === e && upper > bandasMax)
+    // Predicate 3: BANDAS (drop if stratum === e && upper > maxBands)
     expect(sink.matchesScrape(recE1, 3, new Uint8Array([1, 1]))).toBe(true);
     expect(sink.matchesScrape(recE1, 3, new Uint8Array([1, 3]))).toBe(false);
     expect(sink.matchesScrape(recE8, 3, new Uint8Array([1, 1]))).toBe(false);
@@ -129,7 +129,7 @@ describe('DeliverySink', () => {
     sink.dispose();
   });
 
-  it('applyRaspar removes matching records and sends exact RASPADO', () => {
+  it('applyScrape removes matching records and sends exact RASPADO', () => {
     const client = fakeClient();
     const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
 
@@ -147,16 +147,16 @@ describe('DeliverySink', () => {
     });
 
     // Scrape stratum < 1 up to delivery 2
-    sink.applyRaspar({
+    sink.applyScrape({
       handle: 1, order: 5, epoch: 2, through: 2, predicate: 1, params: new Uint8Array([1]),
     }, () => 1000);
 
-    expect(client.sentRaspado.length).toBe(1);
-    const r = client.sentRaspado[0];
+    expect(client.sentScraped.length).toBe(1);
+    const r = client.sentScraped[0];
     expect(r?.order).toBe(5);
     expect(r?.through).toBe(2);
-    expect(r?.raspadas).toBe(1); // delivery 1 was scraped
-    expect(r?.conservadas).toEqual([2]); // delivery 2 was kept
+    expect(r?.scrapedCount).toBe(1); // delivery 1 was scraped
+    expect(r?.kept).toEqual([2]); // delivery 2 was kept
     expect(sink.book.byDelivery.has(1)).toBe(false);
     expect(sink.book.byDelivery.has(2)).toBe(true);
     expect(sink.book.byDelivery.has(3)).toBe(true); // delivery 3 > through 2, untouched
@@ -164,7 +164,7 @@ describe('DeliverySink', () => {
     sink.dispose();
   });
 
-  it('applyRenovar extends lease and inventory reports accurately', () => {
+  it('applyRenew extends lease and inventory reports accurately', () => {
     const client = fakeClient();
     const sink = new DeliverySink(1, () => client, () => 36864, () => 768);
 
@@ -173,11 +173,11 @@ describe('DeliverySink', () => {
       from: 0, through: 1, bytes: 1500, epoch: 1, edition: 1, expires: 2000, rgba: null,
     });
 
-    sink.applyRenovar([10], 4, 120, () => 1000);
+    sink.applyRenew([10], 4, 120, () => 1000);
     expect(sink.book.byDelivery.get(10)?.expires).toBe(1000 + 120000);
     expect(sink.renewThrough).toBe(4);
-    expect(client.sentRecibo.length).toBe(1);
-    expect(client.sentRecibo[0]?.renewThrough).toBe(4);
+    expect(client.sentReceipt.length).toBe(1);
+    expect(client.sentReceipt[0]?.renewThrough).toBe(4);
 
     const inv = sink.inventory(20);
     expect(inv.brushCount).toBe(1);
@@ -201,7 +201,7 @@ describe('DeliverySink', () => {
     expect(sink.book.byDelivery.has(1)).toBe(false);
 
     vi.advanceTimersByTime(100);
-    expect(client.sentSoltar).toEqual([{ handle: 1, reason: 3, ranges: [1] }]);
+    expect(client.sentRelease).toEqual([{ handle: 1, reason: 3, ranges: [1] }]);
 
     sink.dispose();
     vi.useRealTimers();

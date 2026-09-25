@@ -17,11 +17,11 @@ export interface DeliveryLedger {
   byDelivery: Map<number, DeliveryRecord>;
   inFlight: Set<number>;
   pendingReceipt: number[];
-  pendingRaspados: Array<{ order: number; through: number }>;
+  pendingScrapes: Array<{ order: number; through: number }>;
 }
 
 export function emptyLedger(): DeliveryLedger {
-  return { byDelivery: new Map(), inFlight: new Set(), pendingReceipt: [], pendingRaspados: [] };
+  return { byDelivery: new Map(), inFlight: new Set(), pendingReceipt: [], pendingScrapes: [] };
 }
 
 export function ownedDeliveries(b: DeliveryLedger): number[] {

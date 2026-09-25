@@ -1,8 +1,7 @@
-import { RECIBO_BATCH, RECIBO_FLUSH_MS, SOLTAR_BATCH_MS } from '@/shared/config/constants';
+import { RECEIPT_EVERY_N, RECEIPT_EVERY_MS, RELEASE_BATCH_MS } from '@/shared/config/constants';
 import { parseBrushHead, splitBrushId, sliceBands, verifyBand } from '@/shared/proto/brush';
-import { rangesDecode } from '@/shared/proto/ranges';
-import { viDecode } from '@/shared/proto/varint';
 import type { Scrape } from '@/shared/proto/messages';
+import { matchesScrape as scrapeMatches } from '@/entities/delivery/scrape';
 import { emptyLedger, ownedBytes, ownedDeliveries, type DeliveryLedger, type DeliveryRecord } from '@/entities/delivery/store';
 import type { SynthRequest } from '@/workers/protocol';
 import type { SessionClient } from './session-client';
@@ -32,8 +31,8 @@ export class DeliverySink {
     private client: () => SessionClient | null,
     private maxKiB: () => number,
     private maxBrushes: () => number,
-    public semillaAncho = 192,
-    public semillaAlto = 160,
+    public seedWidth = 192,
+    public seedHeight = 160,
   ) {}
 
   private ensureWorker(onBitmap: (delivery: number, bmp: ImageBitmap, ms: number) => void): Worker {
@@ -55,7 +54,7 @@ export class DeliverySink {
             this.book.pendingReceipt.push(out.delivery);
             this.queueMs = Math.max(0, this.queueMs - out.elapsedMs);
             onBitmap(out.delivery, bmp, out.elapsedMs);
-            this.maybeFlushRecibo();
+            this.maybeFlushReceipt();
           } else {
             bmp.close();
           }
@@ -128,8 +127,8 @@ export class DeliverySink {
       qY: h.qY,
       qC: h.qC,
       seed: split.stratum === 10,
-      semillaAncho: this.semillaAncho,
-      semillaAlto: this.semillaAlto,
+      seedWidth: this.seedWidth,
+      seedHeight: this.seedHeight,
       bands: transfer,
     };
     try {
@@ -148,39 +147,39 @@ export class DeliverySink {
     }
   }
 
-  applyRaspar(r: Scrape, now: () => number): void {
+  applyScrape(r: Scrape, now: () => number): void {
     void now;
     this.scrapes.push({ order: r.order, epoch: r.epoch, through: r.through, predicate: r.predicate, params: r.params });
-    let raspadas = 0;
+    let scrapedCount = 0;
     let kib = 0;
     for (const [n, rec] of [...this.book.byDelivery]) {
       if (n > r.through) continue;
       if (this.matchesScrape(rec, r.predicate, r.params)) {
         rec.rgba?.close();
         kib += Math.ceil(rec.bytes / 1024);
-        raspadas += 1;
+        scrapedCount += 1;
         this.book.byDelivery.delete(n);
         this.book.inFlight.delete(n);
       }
     }
-    this.flushSoltar();
-    const keep = ownedDeliveries(this.book).filter((n) => n <= r.through);
-    this.client()?.sendRaspado(this.handle, r.order, r.epoch, r.through, raspadas, kib, keep);
+    this.flushRelease();
+    const keep = ownedDeliveries(this.book).filter((n) => n <= r.through);    this.client()?.sendScraped(this.handle, r.order, r.epoch, r.through, scrapedCount, kib, keep);
     this.settledBelow = this.settledBelow === null ? r.through : Math.max(this.settledBelow, r.through);
     this.scrapes = this.scrapes.filter((p) => p.through > r.through);
   }
 
-  applyRenovar(ranges: number[], order: number, leaseS: number, now: () => number): void {
+  applyRenew(ranges: number[], order: number, leaseS: number, now: () => number): void {
     this.renewThrough = Math.max(this.renewThrough, order);
     const t = now() + leaseS * 1000;
     for (const n of ranges) {
       const rec = this.book.byDelivery.get(n);
       if (rec) rec.expires = t;
     }
-    this.flushRecibo();
+    this.flushReceipt();
   }
 
   inventory(through: number): { brushCount: number; kib: number; ranges: number[] } {
+    this.flushRelease();
     const ranges = ownedDeliveries(this.book).filter((n) => n <= through);
     return { brushCount: new Set([...this.book.byDelivery.values()].map((r) => r.brushId.toString())).size, kib: Math.ceil(ownedBytes(this.book) / 1024), ranges };
   }
@@ -201,7 +200,7 @@ export class DeliverySink {
         const q = this.expiredQueue;
         this.expiredQueue = [];
         this.release(q, 3);
-      }, SOLTAR_BATCH_MS) as unknown as number;
+      }, RELEASE_BATCH_MS) as unknown as number;
     }
   }
 
@@ -226,83 +225,51 @@ export class DeliverySink {
     this.release(nums, 1);
   }
 
-  libre(): number {
+  free(): number {
     return Math.max(0, this.maxBrushes() - this.book.byDelivery.size);
   }
 
   private release(ranges: number[], reason: number): void {
     if (ranges.length === 0) return;
-    this.client()?.sendSoltar(this.handle, reason, [...ranges].sort((a, b) => a - b));
+    this.client()?.sendRelease(this.handle, reason, [...ranges].sort((a, b) => a - b));
   }
 
-  private flushSoltar(): void {
-    void 0;
+  /** Spec §5.2: SOLTAR must precede anything account-dependent (RASPADO/INVENTARIO). */
+  private flushRelease(): void {
+    if (this.expiredQueue.length === 0) return;
+    if (this.releaseTimer !== 0) {
+      clearTimeout(this.releaseTimer);
+      this.releaseTimer = 0;
+    }
+    const q = this.expiredQueue;
+    this.expiredQueue = [];
+    this.release(q, 3);
   }
 
-  private maybeFlushRecibo(): void {
-    if (this.book.pendingReceipt.length >= RECIBO_BATCH) {
-      this.flushRecibo();
+  private maybeFlushReceipt(): void {
+    if (this.book.pendingReceipt.length >= RECEIPT_EVERY_N) {
+      this.flushReceipt();
       return;
     }
     if (this.receiptTimer === 0 && this.book.pendingReceipt.length > 0) {
       this.receiptTimer = setTimeout(() => {
         this.receiptTimer = 0;
-        this.flushRecibo();
-      }, RECIBO_FLUSH_MS) as unknown as number;
+        this.flushReceipt();
+      }, RECEIPT_EVERY_MS) as unknown as number;
     }
   }
 
-  private flushRecibo(): void {
+  private flushReceipt(): void {
+    this.flushRelease();
     const q = this.book.pendingReceipt;
     this.book.pendingReceipt = [];
     if (q.length === 0 && this.renewThrough === 0) return;
     for (const n of q) this.book.inFlight.delete(n);
-    this.client()?.sendRecibo(this.handle, [...q].sort((a, b) => a - b), Math.round(this.queueMs), this.libre(), this.renewThrough);
+    this.client()?.sendReceipt(this.handle, [...q].sort((a, b) => a - b), Math.round(this.queueMs), this.free(), this.renewThrough);
   }
 
   matchesScrape(rec: DeliveryRecord, predicate: number, params: Uint8Array): boolean {
-    switch (predicate) {
-      case 5:
-        return true;
-      case 1: {
-        const stratum = params[0] ?? 0;
-        return rec.stratum < stratum;
-      }
-      case 3: {
-        const stratum = params[0] ?? 0;
-        const bandasMax = params[1] ?? 0;
-        return rec.stratum === stratum && rec.through > bandasMax;
-      }
-      case 4: {
-        try {
-          return listaContains(params, rec.delivery);
-        } catch {
-          return false;
-        }
-      }
-      case 2: {
-        try {
-          if (rec.stratum >= 7) return false;
-          let p = 0;
-          let r = viDecode(params, p); const x0 = r.value; p = r.next;
-          r = viDecode(params, p); const y0 = r.value; p = r.next;
-          r = viDecode(params, p); const x1 = r.value; p = r.next;
-          r = viDecode(params, p); const y1 = r.value;
-          const { stratum, bx, by } = splitBrushId(rec.brushId);
-          const size = 256 * (2 ** stratum);
-          const px0 = bx * size;
-          const py0 = by * size;
-          const px1 = px0 + size;
-          const py1 = py0 + size;
-          const intersects = px0 < x1 && px1 > x0 && py0 < y1 && py1 > y0;
-          return !intersects;
-        } catch {
-          return false;
-        }
-      }
-      default:
-        return false;
-    }
+    return scrapeMatches(rec, predicate, params);
   }
 
   dispose(): void {
@@ -325,9 +292,4 @@ function distScore(r: DeliveryRecord, cx: number, cy: number): number {
   void cx;
   void cy;
   return 0;
-}
-
-function listaContains(params: Uint8Array, delivery: number): boolean {
-  const r = rangesDecode(params, 0);
-  return r.values.includes(delivery);
 }
