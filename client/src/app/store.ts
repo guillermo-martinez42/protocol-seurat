@@ -28,7 +28,7 @@ function createStore<T>(initial: T) {
 
 export interface UiState {
   route: { name: 'gallery' } | { name: 'viewer'; id: string };
-  filter: 'all' | 'landscape' | 'portrait';
+  filter: string;
   loupe: boolean;
   dots: boolean;
   info: boolean;

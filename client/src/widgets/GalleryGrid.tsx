@@ -49,19 +49,25 @@ function Thumb({ work }: { work: Work }): JSX.Element {
 
 interface Props {
   items: Work[];
+  tags?: string[];
   filter: Filter;
   onFilter: (f: Filter) => void;
   onOpen: (id: string) => void;
 }
 
-const CHIPS: Array<[Filter, string]> = [['all', 'All'], ['landscape', 'Landscape'], ['portrait', 'Portrait']];
+export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): JSX.Element {
+  const chips: Array<[Filter, string]> = [
+    ['all', 'All'],
+    ...(tags ?? []).map((t) => [t, t] as [Filter, string]),
+    ['landscape', 'Landscape'],
+    ['portrait', 'Portrait'],
+  ];
 
-export function GalleryGrid({ items, filter, onFilter, onOpen }: Props): JSX.Element {
   return (
     <>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {CHIPS.map(([k, label]) => {
+          {chips.map(([k, label]) => {
             const on = filter === k;
             return (
               <button
@@ -94,6 +100,13 @@ export function GalleryGrid({ items, filter, onFilter, onOpen }: Props): JSX.Ele
               <span style={{ fontSize: 17, fontWeight: 650, fontVariationSettings: "'wdth' 112" }}>{workTitle(w, i)}</span>
               <span style={{ fontSize: 13, color: '#45464F', fontVariantNumeric: 'tabular-nums' }}>{workDims(w)}</span>
             </div>
+            {w.tag && (
+              <div style={{ padding: '0 10px', marginTop: -4 }}>
+                <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 10, background: '#DEE1F9', color: '#171B2C', fontSize: 12, fontWeight: 600 }}>
+                  {w.tag}
+                </span>
+              </div>
+            )}
           </div>
         ))}
       </div>

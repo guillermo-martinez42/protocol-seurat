@@ -24,7 +24,7 @@ final class MetaJson {
                 m.put(kv[0].trim(), kv[1].trim());
             }
         }
-        return new WorkMeta(id, m.getOrDefault("name", id),
+        return new WorkMeta(m.getOrDefault("id", id), m.getOrDefault("name", id),
                 Integer.parseInt(m.getOrDefault("width", "0")),
                 Integer.parseInt(m.getOrDefault("height", "0")),
                 Integer.parseInt(m.getOrDefault("side", "256")),

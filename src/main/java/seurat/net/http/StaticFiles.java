@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Static root: client/dist when built, legacy web/ otherwise. No CDN. */
+/** Static root: client/dist. No CDN. */
 final class StaticFiles {
     private final Path root;
 

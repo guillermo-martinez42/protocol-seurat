@@ -22,6 +22,13 @@ export function GalleryPage(): JSX.Element {
   const ui = useUi();
   const { works } = useSeurat();
   const items = useMemo(() => filterWorks(works, ui.filter), [works, ui.filter]);
+  const tags = useMemo(() => {
+    const s = new Set<string>();
+    for (const w of works) {
+      if (w.tag) s.add(w.tag);
+    }
+    return [...s].sort();
+  }, [works]);
 
   return (
     <div style={{ minHeight: '100vh', background: '#FBF8FF' }}>
@@ -39,6 +46,7 @@ export function GalleryPage(): JSX.Element {
         />
         <GalleryGrid
           items={items}
+          tags={tags}
           filter={ui.filter}
           onFilter={(f) => patchUi({ filter: f })}
           onOpen={(id) => goViewer(id)}

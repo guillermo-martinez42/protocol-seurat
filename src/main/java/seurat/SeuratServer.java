@@ -82,8 +82,7 @@ public final class SeuratServer {
     }
 
     private static Path staticRoot(Path base) {
-        Path dist = base.resolve("client/dist");
-        return Files.exists(dist.resolve("index.html")) ? dist : base.resolve("web");
+        return base.resolve("client/dist");
     }
 
     private static void applyPolicy(Catalog catalog, Sessions sessions,

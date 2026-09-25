@@ -10,6 +10,7 @@ export interface Work {
   estado: WorkState;
   edition: number;
   progreso: number;
+  tag?: string;
 }
 
 export function orientOf(w: Work): Orient {

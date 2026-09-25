@@ -12,6 +12,7 @@ cobertura/
 client/dist/
 target/
 out/
+img/
 /tmp/opencode/
 *.class
 *.log

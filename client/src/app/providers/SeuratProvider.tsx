@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SessionClient, type SessionEvents } from './session-client';
 import { DeliverySink } from './delivery-sink';
-import { applyWork, fixtureWorks } from '@/entities/work/store';
+import { applyWork } from '@/entities/work/store';
 import type { Work } from '@/entities/work/types';
 import type { Abierta, Bienvenida, Concession, PlanMsg, ProtoError } from '@/shared/proto/messages';
 import { GazeSender } from '@/features/send-gaze';
@@ -33,7 +33,7 @@ export function useSeurat(): SeuratState {
 
 export function SeuratProvider({ children }: { children: ReactNode }): JSX.Element {
   const [status, setStatus] = useState('boot');
-  const [works, setWorks] = useState<Work[]>(() => fixtureWorks());
+  const [works, setWorks] = useState<Work[]>([]);
   const [bienvenida, setBienvenida] = useState<Bienvenida | null>(null);
   const [opened, setAbierta] = useState<Abierta | null>(null);
   const [concession, setConcesion] = useState<Concession | null>(null);

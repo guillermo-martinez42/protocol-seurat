@@ -78,13 +78,14 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
     return [
       { k: 'Dimensions', v: dims + ' px' },
       { k: 'Resolution', v: mp },
+      ...(work?.tag ? [{ k: 'Tag', v: work.tag }] : []),
       { k: 'Aspect ratio', v: orient },
       { k: 'Fit zoom', v: fmtPct(fitPct) },
       { k: 'Max zoom', v: (MAX_ZOOM * 100).toLocaleString('en-US') + '%' },
       { k: 'Dots from', v: DOT_THRESHOLD.toLocaleString('en-US') + '%' },
       { k: 'Source', v: seurat.status },
     ];
-  }, [dims, mp, iw, ih, fitPct, seurat.status]);
+  }, [dims, mp, iw, ih, fitPct, seurat.status, work?.tag]);
 
   const go = (d: number): void => {
     const next = seurat.works[stepIndex(idx, d, n)];

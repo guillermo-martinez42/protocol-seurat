@@ -50,13 +50,13 @@ public final class MasterIntake {
                 }
                 return;
             }
-            String name = id.replaceAll("\\.[^.]+$", "");
-            if (isLista(name)) {
-                Log.info("ingest", "Work already completed, skipping: " + name);
+            String name = file.getFileName().toString().replaceAll("\\.[^.]+$", "");
+            if (isLista(id)) {
+                Log.info("ingest", "Work already completed, skipping: " + id);
                 return;
             }
-            new IngestJob(name, name, file, config.works, catalog,
-                    () -> substitute(name)).run();
+            new IngestJob(id, name, file, config.works, catalog,
+                    () -> substitute(id)).run();
         } catch (Exception ex) {
             Log.error("ingest", "Ingest failed for " + id + ": " + ex.getMessage(), ex);
             AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
@@ -92,15 +92,15 @@ public final class MasterIntake {
     public void watch() {
         Thread.ofVirtual().start(() -> {
             try {
-                var watcher = config.inbox.getFileSystem().newWatchService();
-                config.inbox.register(watcher,
-                        java.nio.file.StandardWatchEventKinds.ENTRY_CREATE);
-                Log.info("ingest", "Inbox file watcher active on " + config.inbox.toAbsolutePath());
-                try (DirectoryStream<Path> existing = Files.newDirectoryStream(config.inbox)) {
-                    for (Path file : existing) {
-                        offerIfMaster(file.getFileName().toString());
-                    }
+                scan(config.inbox);
+                Path imgDir = Path.of("img");
+                if (Files.exists(imgDir) && !config.inbox.toAbsolutePath().normalize()
+                        .equals(imgDir.toAbsolutePath().normalize())) {
+                    scan(imgDir);
                 }
+                var watcher = config.inbox.getFileSystem().newWatchService();
+                config.inbox.register(watcher, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE);
+                Log.info("ingest", "Inbox file watcher active on " + config.inbox.toAbsolutePath());
                 for (;;) {
                     var key = watcher.take();
                     for (var event : key.pollEvents()) {
@@ -113,6 +113,23 @@ public final class MasterIntake {
                 AuditLog.alert("inbox watch failed: " + ex.getMessage());
             }
         });
+    }
+
+    private void scan(Path root) {
+        if (!Files.exists(root)) return;
+        try (var walk = Files.walk(root)) {
+            for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                String lower = file.getFileName().toString().toLowerCase();
+                if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
+                        || lower.endsWith(".zip")) {
+                    String rel = root.relativize(file).toString().replace('\\', '/');
+                    String id = rel.replaceAll("\\.[^.]+$", "");
+                    offer(id, file);
+                }
+            }
+        } catch (Exception ex) {
+            Log.error("ingest", "Scan failed on " + root + ": " + ex.getMessage());
+        }
     }
 
     private void offerIfMaster(String name) {

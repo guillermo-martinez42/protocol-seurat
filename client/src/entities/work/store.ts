@@ -1,7 +1,18 @@
 import type { WorkMsg } from '@/shared/proto/messages';
 import type { Orient, Work } from './types';
 
-export type Filter = 'all' | Orient;
+export type Filter = 'all' | Orient | string;
+
+export function tagOfWork(id: string, name?: string): string | undefined {
+  if (id.includes('/')) {
+    const parts = id.split('/');
+    return parts.slice(0, -1).join('/');
+  }
+  if (name && name.startsWith('[') && name.includes(']')) {
+    return name.slice(1, name.indexOf(']'));
+  }
+  return undefined;
+}
 
 export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work> {
   const next = new Map(prev);
@@ -9,6 +20,7 @@ export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work
     next.delete(m.id);
     return next;
   }
+  const tag = tagOfWork(m.id, m.name);
   next.set(m.id, {
     id: m.id,
     name: m.name,
@@ -18,13 +30,16 @@ export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work
     estado: m.estado as Work['estado'],
     edition: m.edition,
     progreso: m.progreso,
+    tag,
   });
   return next;
 }
 
 export function filterWorks(list: Work[], f: Filter): Work[] {
   if (f === 'all') return list;
-  return list.filter((w) => (w.width >= w.height ? 'landscape' : 'portrait') === f);
+  if (f === 'landscape') return list.filter((w) => w.width >= w.height);
+  if (f === 'portrait') return list.filter((w) => w.width < w.height);
+  return list.filter((w) => w.tag === f);
 }
 
 export function fixtureWorks(): Work[] {

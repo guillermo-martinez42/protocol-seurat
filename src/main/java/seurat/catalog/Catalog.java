@@ -90,14 +90,13 @@ public final class Catalog {
 
     /** Restart recovery: rebuild LISTA stores, truncate to the index. */
     public void load() throws IOException {
-        try (DirectoryStream<Path> dirs = Files.newDirectoryStream(worksDir)) {
-            for (Path dir : dirs) {
-                Path meta = dir.resolve("meta.json");
-                if (!Files.isDirectory(dir) || !Files.exists(meta)) {
-                    continue;
-                }
-                var info = MetaJson.read(dir.getFileName().toString(),
-                        Files.readString(meta));
+        if (!Files.exists(worksDir)) return;
+        try (var walk = Files.walk(worksDir)) {
+            for (Path meta : walk.filter(p -> p.getFileName().toString().equals("meta.json")).toList()) {
+                Path dir = meta.getParent();
+                if (dir.getFileName().toString().equals("ed1")) continue;
+                String defaultId = worksDir.relativize(dir).toString().replace('\\', '/');
+                var info = MetaJson.read(defaultId, Files.readString(meta));
                 WorkRecord work = new WorkRecord(info);
                 if (info.strata() > 0) {
                     int top = info.strata() - 1;
