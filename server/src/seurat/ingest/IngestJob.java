@@ -49,24 +49,8 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' dimensions: " + w + "x" + h + ", strata=" + (top + 1));
                 WorkRecord work = catalog.get(id);
                 work.meta = new WorkMeta(id, name, w, h, 256, top + 1,
-<<<<<<< HEAD:src/main/java/seurat/ingest/IngestJob.java
                         ProtoCodes.ST_PINTANDO, 1, 0, 2);
                 FileBrushStore ed2 = store(top, w, h);
-=======
-                        ProtoCodes.ST_RECIBIENDO, 1, 0, 2);
-                FileBrushStore ed1 = store(top, w, h, 1);
-                Path seed = ed1.dir().resolve("semilla.bin");
-                if (!Files.isRegularFile(seed) || Files.size(seed) <= 4) {
-                    SketchBuilder.build(master, ed1, top);
-                }
-                ed1.close();
-                if (!Files.isRegularFile(seed) || Files.size(seed) <= 4) {
-                    throw new IOException("sketch seed was not written");
-                }
-                catalog.sketch(id, ed1, ProtoCodes.ST_BOCETO, 1);
-                Log.info("ingest", "Work '" + id + "' ed1 sketch generated (ST_BOCETO)");
-                FileBrushStore ed2 = store(top, w, h, 2);
->>>>>>> 9c712d8c97a04d5304e6153c9e590526f79ec381:server/src/seurat/ingest/IngestJob.java
                 new ImagePass(id, catalog, ed2, top, w, h, worksDir).run(reader);
                 ed2.close();
                 catalog.sketch(id, ed2, ProtoCodes.ST_LISTA, 2);
@@ -74,11 +58,7 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' ed2 pyramid completed, work ready (ST_LISTA)");
             }
             onReady.run();
-<<<<<<< HEAD:src/main/java/seurat/ingest/IngestJob.java
         } catch (Throwable ex) { // OutOfMemoryError included: never leave a work stuck mid-pass
-=======
-        } catch (Throwable ex) {
->>>>>>> 9c712d8c97a04d5304e6153c9e590526f79ec381:server/src/seurat/ingest/IngestJob.java
             Log.error("ingest", "Ingest failed for '" + id + "': " + ex.getMessage(), ex);
             try {
                 AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());

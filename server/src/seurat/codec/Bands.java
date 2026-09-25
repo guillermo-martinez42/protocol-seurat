@@ -18,28 +18,6 @@ public final class Bands {
     public static final int PARENTS = 16384;
     public static final int[] CUTS = {0, 2048, 4096, 8192, 16384};
 
-<<<<<<< HEAD:src/main/java/seurat/codec/Bands.java
-    /**
-     * Order of parents: E desc, morton asc. Returns rank per parent index.
-     * One primitive sort on packed keys: ~E (high 32) | morton << 14 | index.
-     */
-    public static int[] order(int[] energy, int n) {
-        if (n > PARENTS) {
-            throw new IllegalArgumentException("n > " + PARENTS);
-        }
-        int side = (int) Math.sqrt(n);
-        long[] keys = new long[n];
-        for (int i = 0; i < n; i++) {
-            long m = Morton.encode(i % side, i / side);
-            keys[i] = ((long) ~energy[i] << 32) | (m << 14) | i;
-        }
-        Arrays.sort(keys);
-        int[] rank = new int[n];
-        for (int r = 0; r < n; r++) {
-            rank[(int) (keys[r] & 0x3FFF)] = r;
-        }
-        return rank;
-=======
     private static final ThreadLocal<Deflater> DEFLATERS =
             ThreadLocal.withInitial(() -> new Deflater(seurat.config.SeuratConstants.DEFLATE_LEVEL, true));
     private static final ThreadLocal<byte[]> RAW_BUFS =
@@ -50,7 +28,6 @@ public final class Bands {
     /** Order of parents: E desc, morton asc. Returns rank per parent index. */
     public static int[] order(int[] energy, int n) {
         return BandsOrder.order(energy, n);
->>>>>>> 9c712d8c97a04d5304e6153c9e590526f79ec381:server/src/seurat/codec/Bands.java
     }
 
     public static int bandOf(int rank) {
@@ -94,16 +71,9 @@ public final class Bands {
                 }
             }
         }
-<<<<<<< HEAD:src/main/java/seurat/codec/Bands.java
-        byte[] raw = Arrays.copyOf(b.array(), b.position());
-        // zlib default (6): ingest 1.7x faster than level 9 for 0.8% more bytes (1 GB sample).
-        Deflater d = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
-        d.setInput(raw);
-=======
         Deflater d = DEFLATERS.get();
         d.reset();
         d.setInput(raw, 0, pos);
->>>>>>> 9c712d8c97a04d5304e6153c9e590526f79ec381:server/src/seurat/codec/Bands.java
         d.finish();
         byte[] comp = COMP_BUFS.get();
         int len = d.deflate(comp);

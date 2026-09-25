@@ -69,7 +69,7 @@ describe('ranges (SACK)', () => {
     expect(r.next).toBe(3);
   });
   it('RECIBO with nothing new = 01 000000 28 42c4 00 (Java MsgLoans.Receipt bytes)', () => {
-    const r = { handle: 1, completed: [], queueMs: 40, libre: 708, renewThrough: 0 };
+    const r = { handle: 1, completed: [], queueMs: 40, free: 708, renewThrough: 0 };
     expect(hex(receiptCore(r))).toBe('010000002842c400');
     expect(receiptDecode(receiptCore(r))).toEqual(r);
   });

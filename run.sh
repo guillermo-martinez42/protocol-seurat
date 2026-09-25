@@ -17,13 +17,8 @@ if java -version 2>&1 | grep -q 'version "20\.'; then
   RUN_FLAGS=(--enable-preview)
 fi
 
-<<<<<<< HEAD
-javac "${FLAGS[@]}" -d .seurat/build/classes $(find src/main/java -name '*.java')
-# Ingest heap grows with image width (~2.5 GB live at 196,608 px); 6G leaves GC headroom.
-exec java "${RUN_FLAGS[@]}" -Xmx6G -cp .seurat/build/classes seurat.SeuratServer "$@"
-=======
 javac "${FLAGS[@]}" -d .seurat/build/classes $(find server/src -name '*.java')
 jar -cf .seurat/build/seurat.jar -C .seurat/build/classes .
-HEAP="${SEURAT_HEAP:--Xmx4G}"
+# Ingest heap grows with image width (~2.5 GB live at 196,608 px); 6G leaves GC headroom.
+HEAP="${SEURAT_HEAP:--Xmx6G}"
 exec java "${RUN_FLAGS[@]}" $HEAP ${JAVA_OPTS:-} -cp .seurat/build/seurat.jar:.seurat/build/classes seurat.SeuratServer "$@"
->>>>>>> 9c712d8c97a04d5304e6153c9e590526f79ec381
