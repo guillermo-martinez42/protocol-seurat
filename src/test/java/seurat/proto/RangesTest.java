@@ -7,6 +7,8 @@ import seurat.kit.TestKit;
 public final class RangesTest {
     public static void main(String[] args) {
         empty();
+        emptyReceipt();
+        malformedReceipt();
         recibo();
         raspado();
         renovar();
@@ -17,7 +19,8 @@ public final class RangesTest {
     private static void empty() {
         Ranges r = Ranges.decode(ByteBuffer.wrap(new byte[]{0x00, 0x00, 0x00}));
         TestKit.check(r.isEmpty() && r.largest() == 0, "mayor 0 is empty");
-        TestKit.check(Ranges.empty().encode().length == 3, "empty encodes 3B");
+        TestKit.check(java.util.Arrays.equals(Ranges.empty().encode(),
+                new byte[]{0, 0, 0}), "empty encodes 3B");
     }
 
     private static void recibo() {
@@ -28,6 +31,24 @@ public final class RangesTest {
                 "recibo gaps");
         TestKit.check(r.largest() == 60 && r.size() == 15, "recibo size 7+8=15");
         TestKit.check(Ranges.decode(ByteBuffer.wrap(r.encode())).equals(r), "round-trip");
+    }
+
+    private static void emptyReceipt() {
+        var receipt = new MsgLoans.Receipt(1, Ranges.empty(), 40, 708, 0);
+        var parsed = MsgLoans.Receipt.parse(receipt.encode());
+        TestKit.check(parsed.completed().isEmpty() && parsed.queueMs() == 40
+                && parsed.free() == 708 && parsed.renewThrough() == 0,
+                "empty RECIBO keeps following fields");
+    }
+
+    private static void malformedReceipt() {
+        try {
+            MsgLoans.Receipt.parse(new byte[]{1, 0});
+            throw new AssertionError("truncated RECIBO accepted");
+        } catch (FatalProtocol ex) {
+            TestKit.check(ex.code == 1 && ex.refType == FrameType.RECIBO,
+                    "truncated RECIBO is fatal ERROR 1");
+        }
     }
 
     private static void raspado() {

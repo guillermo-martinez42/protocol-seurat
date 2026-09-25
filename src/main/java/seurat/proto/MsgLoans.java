@@ -1,6 +1,7 @@
 package seurat.proto;
 
 import java.nio.ByteBuffer;
+import java.nio.BufferUnderflowException;
 import java.util.Arrays;
 
 /** RASPAR / RASPADO / RECIBO / SOLTAR / RENOVAR / AUDITAR / INVENTARIO. */
@@ -87,10 +88,20 @@ public final class MsgLoans {
         }
 
         public static Receipt parse(byte[] p) {
-            ByteBuffer b = ByteBuffer.wrap(p);
-            long h = VarInt.get(b);
-            Ranges r = Ranges.decode(b);
-            return new Receipt(h, r, VarInt.get(b), VarInt.get(b), VarInt.get(b));
+            try {
+                ByteBuffer b = ByteBuffer.wrap(p);
+                long h = VarInt.get(b);
+                Ranges r = Ranges.decode(b);
+                long queue = VarInt.get(b);
+                long free = VarInt.get(b);
+                long renew = VarInt.get(b);
+                if (b.hasRemaining()) {
+                    throw new IllegalArgumentException("RECIBO trailing bytes");
+                }
+                return new Receipt(h, r, queue, free, renew);
+            } catch (BufferUnderflowException | IllegalArgumentException ex) {
+                throw new FatalProtocol(1, FrameType.RECIBO, "RECIBO truncated or invalid");
+            }
         }
     }
 
