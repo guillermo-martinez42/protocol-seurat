@@ -24,7 +24,8 @@ An asynchronous, server-authoritative protocol and viewer for streaming gigapixe
 │   └── dist/                    # Compiled static production bundle
 ├── scripts/
 │   ├── run-tests.sh             # Compiles & executes backend tests + checks LoC budgets
-│   └── check-loc.sh             # Validates strict line-of-code budgets
+│   ├── check-loc.sh             # Validates strict line-of-code budgets
+│   └── clean.sh                 # Cleans ephemeral build artifacts without touching runtime data
 ├── run.sh                       # One-command server builder & launcher
 └── seurat.conf                  # Runtime server configuration
 ```
@@ -69,11 +70,11 @@ The server serves the compiled Single Page Application (`client/dist/`) and mana
 Images can be ingested into the pyramid store in two ways:
 
 ### Option A: Local Inbox Drop (Automatic Ingest)
-Place any PNG or TIFF image directly into the `inbox/` directory:
+Place any PNG or TIFF image directly into the `.seurat/runtime/inbox/` directory:
 ```bash
-cp /path/to/my-image.png inbox/mona-lisa
+cp /path/to/my-image.png .seurat/runtime/inbox/mona-lisa
 ```
-The server's intake watcher will detect the file, construct the multi-stratum pyramidal brushes and seed (`semilla.bin`), and register it in the work catalog (`obras/`).
+The server's intake watcher will detect the file, construct the multi-stratum pyramidal brushes and seed (`semilla.bin`), and register it in the work catalog (`.seurat/runtime/obras/`).
 
 ### Option B: HTTP Admin REST API
 Upload an image with the admin token configured in `seurat.conf`:
@@ -126,9 +127,9 @@ Server parameters can be customized in `seurat.conf`:
 | Setting | Default | Description |
 | :--- | :--- | :--- |
 | `http.port` | `8080` | Port for HTTP static files, handshake, and WebSocket traffic. |
-| `inbox` | `inbox` | Directory watched for incoming image intake. |
-| `works` | `obras` | Directory containing committed multi-scale work packages. |
-| `coverage` | `cobertura` | Persistent principal coverage tracking (fine strata token buckets). |
+| `inbox` | `.seurat/runtime/inbox` | Directory watched for incoming image intake. |
+| `works` | `.seurat/runtime/obras` | Directory containing committed multi-scale work packages. |
+| `coverage` | `.seurat/runtime/cobertura` | Persistent principal coverage tracking (fine strata token buckets). |
 | `admin.token` | `cambia-esto` | Token required for admin REST routes (`X-Admin-Token`). |
 | `eviction.policy` | `lru` | Voluntary eviction policy SPI implementation. |
 | `session.max_brushes`| `1024` | Maximum concurrent active brush grants per session. |
