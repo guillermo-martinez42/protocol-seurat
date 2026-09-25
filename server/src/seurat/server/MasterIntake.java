@@ -1,6 +1,6 @@
 package seurat.server;
 
-import java.nio.file.DirectoryStream;
+import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
@@ -43,7 +43,13 @@ public final class MasterIntake {
         try {
             if (file.toString().endsWith(".zip")) {
                 Log.info("ingest", "Unpacking zip archive: " + file.getFileName());
-                for (Path img : ZipUnpacker.unpack(file, this::isLista)) {
+                List<Path> imgs = ZipUnpacker.unpack(file, this::isLista);
+                if (imgs.isEmpty()) {
+                    Log.info("ingest", "Zip archive " + file.getFileName() + " has no new works to ingest");
+                    return;
+                }
+                Log.info("ingest", "Ingesting " + imgs.size() + " work(s) from " + file.getFileName());
+                for (Path img : imgs) {
                     String name = img.getFileName().toString().replaceAll("\\.[^.]+$", "");
                     new IngestJob(name, name, img, config.works, catalog,
                             () -> substitute(name)).run();
@@ -113,12 +119,12 @@ public final class MasterIntake {
         if (!Files.exists(root)) return;
         try (var walk = Files.walk(root)) {
             for (Path file : walk.filter(Files::isRegularFile).toList()) {
+                String rel = root.relativize(file).toString().replace('\\', '/');
+                if (rel.contains(".d/") || rel.startsWith(".d/")) continue;
                 String lower = file.getFileName().toString().toLowerCase();
                 if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
                         || lower.endsWith(".zip")) {
-                    String rel = root.relativize(file).toString().replace('\\', '/');
-                    String id = rel.replaceAll("\\.[^.]+$", "");
-                    offer(id, file);
+                    offer(rel.replaceAll("\\.[^.]+$", ""), file);
                 }
             }
         } catch (Exception ex) {
@@ -127,6 +133,7 @@ public final class MasterIntake {
     }
 
     private void offerIfMaster(String name) {
+        if (name.endsWith(".d") || name.endsWith(".tmp") || name.contains(".d/")) return;
         String lower = name.toLowerCase();
         if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
                 || lower.endsWith(".zip")) {
