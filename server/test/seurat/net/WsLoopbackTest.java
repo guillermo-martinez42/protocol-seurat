@@ -116,6 +116,8 @@ public final class WsLoopbackTest {
                 responseFrame = readControl(in);
             }
             TestKit.check(responseFrame.type() == FrameType.PLAN, "PLAN response to channel 2 MIRADA");
+            var gaze32 = new MsgGaze.Gaze(32, 2, 0, 0, 1024, 768, 1024, 768, 0);
+            sendWs(out, 2, gaze32.encode());
         }
         System.out.println("WsLoopbackTest OK");
     }
