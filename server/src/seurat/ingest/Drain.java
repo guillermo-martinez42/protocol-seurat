@@ -62,11 +62,11 @@ final class Drain {
         final int row = by;
         for (int bx = 0; bx < nx; bx++) {
             final int col = bx;
-            int[][] pw = Window.parents(ps, w2, col);
-            int[][][] hw = Window.details(hd, w2, col);
-            int[][][] vw = Window.details(vd, w2, col);
-            int[][][] dw = Window.details(dd, w2, col);
             tasks.add(pool.submit(() -> {
+                int[][] pw = Window.parents(ps, w2, col);
+                int[][][] hw = Window.details(hd, w2, col);
+                int[][][] vw = Window.details(vd, w2, col);
+                int[][][] dw = Window.details(dd, w2, col);
                 var bb = BrushEncoder.encode(pw, hw, vw, dw, 16384, 128, qy, qc);
                 store.append(level, col, row, bb.bands(), bb.crcs());
                 return null;
@@ -77,8 +77,10 @@ final class Drain {
         pushUp(ps, w2);
     }
 
+    private static final int MAX_TASKS = Math.max(64, Runtime.getRuntime().availableProcessors() * 8);
+
     private static void throttle(List<Future<?>> tasks) {
-        while (tasks.size() >= 32) {
+        while (tasks.size() >= MAX_TASKS) {
             try {
                 tasks.remove(0).get();
             } catch (Exception ex) {

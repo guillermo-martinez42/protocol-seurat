@@ -52,11 +52,12 @@ public final class IngestJob implements Runnable {
                 work.meta = new WorkMeta(id, name, w, h, 256, top + 1,
                         ProtoCodes.ST_RECIBIENDO, 1, 0, 2);
                 FileBrushStore ed1 = store(top, w, h, 1);
-                SketchBuilder.build(master, ed1, top);
-                ed1.close();
                 Path seed = ed1.dir().resolve("semilla.bin");
-                if (!Files.isRegularFile(seed)
-                        || Files.size(seed) <= 4) {
+                if (!Files.isRegularFile(seed) || Files.size(seed) <= 4) {
+                    SketchBuilder.build(master, ed1, top);
+                }
+                ed1.close();
+                if (!Files.isRegularFile(seed) || Files.size(seed) <= 4) {
                     throw new IOException("sketch seed was not written");
                 }
                 catalog.sketch(id, ed1, ProtoCodes.ST_BOCETO, 1);

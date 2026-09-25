@@ -83,14 +83,6 @@ final class StoreWriter {
             ends[i] = acc;
         }
         long at = slot * IndexEntry.BYTES;
-        if (idxChannels[stratum].size() < at + IndexEntry.BYTES) {
-            idxChannels[stratum].position(idxChannels[stratum].size());
-            ByteBuffer fill = ByteBuffer.allocate(IndexEntry.BYTES);
-            while (idxChannels[stratum].size() < at + IndexEntry.BYTES) {
-                fill.clear();
-                idxChannels[stratum].write(fill);
-            }
-        }
         idxChannels[stratum].write(
                 ByteBuffer.wrap(new IndexEntry(off, ends, crcs).encode()), at);
     }

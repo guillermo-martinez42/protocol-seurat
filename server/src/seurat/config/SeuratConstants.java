@@ -30,4 +30,6 @@ public final class SeuratConstants {
     public static final int QUEUE_MAX = 256;
     public static final int SEED_STRATUM = 10;
     public static final int SKETCH_MIN = 7;
+    public static final int DEFLATE_LEVEL = 6;
 }
+

@@ -85,7 +85,8 @@ public final class PngReader implements MasterReader {
                 return null;
             }
             int bp = ct == 6 ? 4 : (ct == 2 ? 3 : 1);
-            DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis)));
+            var inf = new java.util.zip.Inflater();
+            DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536));
             return new StreamHeader(w, h, bp, ct, is, sl);
         } catch (Exception ex) {
             return null;

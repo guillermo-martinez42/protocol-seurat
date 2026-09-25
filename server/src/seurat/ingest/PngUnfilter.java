@@ -5,24 +5,43 @@ final class PngUnfilter {
     private PngUnfilter() {}
 
     static void unfilter(int filter, byte[] cur, byte[] prev, int bpp, int len) {
-        for (int i = 0; i < len; i++) {
-            int a = i >= bpp ? (cur[i - bpp] & 0xFF) : 0;
-            int b = prev[i] & 0xFF;
-            int c = (i >= bpp) ? (prev[i - bpp] & 0xFF) : 0;
-            int val = cur[i] & 0xFF;
-            cur[i] = (byte) switch (filter) {
-                case 1 -> (val + a) & 0xFF;
-                case 2 -> (val + b) & 0xFF;
-                case 3 -> (val + ((a + b) >> 1)) & 0xFF;
-                case 4 -> {
+        switch (filter) {
+            case 1 -> {
+                for (int i = bpp; i < len; i++) {
+                    cur[i] = (byte) ((cur[i] & 0xFF) + (cur[i - bpp] & 0xFF));
+                }
+            }
+            case 2 -> {
+                for (int i = 0; i < len; i++) {
+                    cur[i] = (byte) ((cur[i] & 0xFF) + (prev[i] & 0xFF));
+                }
+            }
+            case 3 -> {
+                for (int i = 0; i < bpp; i++) {
+                    cur[i] = (byte) ((cur[i] & 0xFF) + ((prev[i] & 0xFF) >> 1));
+                }
+                for (int i = bpp; i < len; i++) {
+                    int a = cur[i - bpp] & 0xFF;
+                    int b = prev[i] & 0xFF;
+                    cur[i] = (byte) ((cur[i] & 0xFF) + ((a + b) >> 1));
+                }
+            }
+            case 4 -> {
+                for (int i = 0; i < bpp; i++) {
+                    cur[i] = (byte) ((cur[i] & 0xFF) + (prev[i] & 0xFF));
+                }
+                for (int i = bpp; i < len; i++) {
+                    int a = cur[i - bpp] & 0xFF;
+                    int b = prev[i] & 0xFF;
+                    int c = prev[i - bpp] & 0xFF;
                     int p = a + b - c;
                     int pa = Math.abs(p - a);
                     int pb = Math.abs(p - b);
                     int pc = Math.abs(p - c);
-                    yield (val + ((pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c))) & 0xFF;
+                    cur[i] = (byte) ((cur[i] & 0xFF) + ((pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c)));
                 }
-                default -> val;
-            };
+            }
+            default -> {}
         }
     }
 
