@@ -43,6 +43,28 @@ function ycocgInv(y: number, co: number, cg: number): [number, number, number] {
   return [b + co, g, b];
 }
 
+function loadParentPlanes(req: SynthRequest, planes: Record<'Y' | 'Co' | 'Cg', Int16Array>): void {
+  if (!req.parentPlanes) return;
+  const width = req.parentPlaneWidth ?? 256;
+  const height = req.parentPlaneHeight ?? 256;
+  const x0 = req.parentX ?? 0;
+  const y0 = req.parentY ?? 0;
+  const names = ['Y', 'Co', 'Cg'] as const;
+  for (let c = 0; c < names.length; c++) {
+    const name = names[c];
+    if (!name) continue;
+    const source = new Int16Array(req.parentPlanes[c] ?? new ArrayBuffer(0));
+    const target = planes[name];
+    for (let y = 0; y < 128; y++) {
+      for (let x = 0; x < 128; x++) {
+        const sx = Math.min(width - 1, x0 + x);
+        const sy = Math.min(height - 1, y0 + y);
+        target[y * 128 + x] = source[sy * width + sx] ?? 0;
+      }
+    }
+  }
+}
+
 async function inflateRaw(data: Uint8Array): Promise<Uint8Array> {
   const ds = new DecompressionStream('deflate-raw');
   const w = ds.writable.getWriter();
@@ -104,6 +126,7 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
         }
       }
     } else {
+      loadParentPlanes(req, planes);
       const n = 16384;
       const nch = req.qC > 0 ? 3 : 1;
       const chNames = ['Y', 'Co', 'Cg'] as const;
@@ -139,7 +162,7 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
         }
       }
 
-      for (let c = 0; c < nch; c++) {
+      for (let c = 0; c < 3; c++) {
         const chName = chNames[c];
         if (!chName) continue;
         const pl = planes[chName];
@@ -152,7 +175,8 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
             const hVal = hVals?.[idx] ?? 0;
             const vVal = vVals?.[idx] ?? 0;
             const dVal = dVals?.[idx] ?? 0;
-            const [a, b, cc, dd] = invBlock(0, hVal, vVal, dVal);
+            const parent = planes[chName][idx] ?? 0;
+            const [a, b, cc, dd] = invBlock(parent, hVal, vVal, dVal);
             pl[(2 * py) * 256 + 2 * pxCoord] = a;
             pl[(2 * py) * 256 + 2 * pxCoord + 1] = b;
             pl[(2 * py + 1) * 256 + 2 * pxCoord] = cc;
@@ -176,19 +200,27 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
 
     const out: SynthResult = {
       delivery: req.delivery,
+      synthesisId: req.synthesisId,
       ok: true,
       rgba: rgba.buffer as ArrayBuffer,
+      planes: [
+        planes.Y.buffer as ArrayBuffer,
+        planes.Co.buffer as ArrayBuffer,
+        planes.Cg.buffer as ArrayBuffer,
+      ],
       width: w,
       height: h,
       elapsedMs: performance.now() - t0,
     };
-    self.postMessage(out, { transfer: [out.rgba as ArrayBuffer] });
+    self.postMessage(out, { transfer: [out.rgba as ArrayBuffer, ...(out.planes ?? [])] });
   } catch (e) {
     const out: SynthResult = {
       delivery: req.delivery,
+      synthesisId: req.synthesisId,
       ok: false,
       error: e instanceof Error ? e.message : String(e),
       rgba: null,
+      planes: null,
       width: 0,
       height: 0,
       elapsedMs: performance.now() - t0,

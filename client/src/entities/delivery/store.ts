@@ -11,6 +11,15 @@ export interface DeliveryRecord {
   edition: number;
   expires: number;
   rgba: ImageBitmap | null;
+  /** Validated wire bands are retained as the canonical synthesis source. */
+  bands?: ArrayBuffer[];
+  planes?: ArrayBuffer[] | null;
+  qY?: number;
+  qC?: number;
+  pending?: boolean;
+  receiptQueued?: boolean;
+  receiptSent?: boolean;
+  parentDelivery?: number;
 }
 
 export interface DeliveryLedger {
@@ -18,10 +27,15 @@ export interface DeliveryLedger {
   inFlight: Set<number>;
   pendingReceipt: number[];
   pendingScrapes: Array<{ order: number; through: number }>;
+  parentOf: Map<number, number>;
+  childrenOf: Map<number, Set<number>>;
 }
 
 export function emptyLedger(): DeliveryLedger {
-  return { byDelivery: new Map(), inFlight: new Set(), pendingReceipt: [], pendingScrapes: [] };
+  return {
+    byDelivery: new Map(), inFlight: new Set(), pendingReceipt: [], pendingScrapes: [],
+    parentOf: new Map(), childrenOf: new Map(),
+  };
 }
 
 export function ownedDeliveries(b: DeliveryLedger): number[] {
