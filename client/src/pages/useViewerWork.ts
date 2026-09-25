@@ -9,28 +9,30 @@ import { DEFAULT_WORK_WIDTH, DEFAULT_WORK_HEIGHT } from '@/shared/config/view';
 
 export function useViewerWork(id: string, seurat: SeuratState) {
   const [attempt, setAttempt] = useState(0);
-  const miradaInit = useRef(false);
+  const gazeInit = useRef(false);
 
   const idx = Math.max(0, seurat.works.findIndex((w) => w.id === id));
   const work = seurat.works[idx] ?? seurat.works[0];
   const n = seurat.works.length;
 
   useEffect(() => {
-    miradaInit.current = false;
-    if (seurat.client && seurat.bienvenida) {
+    gazeInit.current = false;
+    if (seurat.client && seurat.welcome) {
       seurat.closeWork();
-      seurat.client.openObra(id);
+      seurat.client.openWork(id);
     }
     return () => {
       seurat.closeWork();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, attempt, seurat.bienvenida]);
+  }, [id, attempt, seurat.welcome]);
 
   useEffect(() => {
     const onVis = (): void => {
       if (document.visibilityState === 'hidden' && seurat.opened && seurat.gazeService) {
         seurat.gazeService.hidden(seurat.opened.handle);
+      } else if (document.visibilityState === 'visible') {
+        gazeInit.current = false;
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -64,12 +66,12 @@ export function useViewerWork(id: string, seurat: SeuratState) {
   };
 
   const onSyncMotion = (s: ViewSync): void => {
-    if (!miradaInit.current && seurat.gazeService && seurat.opened) {
-      miradaInit.current = true;
+    if (!gazeInit.current && seurat.gazeService && seurat.opened) {
+      gazeInit.current = true;
       seurat.gazeService.motion({
         handle: seurat.opened.handle,
         x0: 0, y0: 0, x1: iw, y1: ih,
-        vw: Math.round(s.w), vh: Math.round(s.h), mflags: 0,
+        vw: Math.round(s.w), vh: Math.round(s.h), flags: 0,
       });
     }
   };

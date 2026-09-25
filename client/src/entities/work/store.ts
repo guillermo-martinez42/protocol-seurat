@@ -1,4 +1,4 @@
-import type { WorkMsg } from '@/shared/proto/messages';
+import type { WorkMessage } from '@/shared/proto/messages';
 import type { Orient, Work } from './types';
 
 export type Filter = 'all' | Orient | string;
@@ -14,7 +14,7 @@ export function tagOfWork(id: string, name?: string): string | undefined {
   return undefined;
 }
 
-export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work> {
+export function applyWork(prev: Map<string, Work>, m: WorkMessage): Map<string, Work> {
   const next = new Map(prev);
   if (m.event === 4) {
     next.delete(m.id);
@@ -26,10 +26,10 @@ export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work
     name: m.name,
     width: m.width,
     height: m.height,
-    estratos: m.estratos,
-    estado: m.estado as Work['estado'],
+    strata: m.strata,
+    state: m.state as Work['state'],
     edition: m.edition,
-    progreso: m.progreso,
+    progress: m.progress,
     tag,
   });
   return next;
@@ -62,9 +62,9 @@ export function fixtureWorks(): Work[] {
     name,
     width,
     height,
-    estratos: 11,
-    estado: 3 as const,
+    strata: 11,
+    state: 3 as const,
     edition: 2,
-    progreso: 100,
+    progress: 100,
   }));
 }

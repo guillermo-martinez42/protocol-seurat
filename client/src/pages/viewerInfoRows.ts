@@ -16,10 +16,12 @@ export function buildViewerInfoRows(
   ih: number,
   fitPct: number,
   status: string,
+  tag?: string,
 ): InfoRowItem[] {
   return [
     { k: 'Dimensions', v: dims + ' px' },
     { k: 'Resolution', v: mp },
+    ...(tag ? [{ k: 'Tag', v: tag }] : []),
     { k: 'Aspect ratio', v: iw >= ih ? '3 : 2' : '2 : 3' },
     { k: 'Fit zoom', v: fmtPct(fitPct) },
     { k: 'Max zoom', v: (VIEWER_MAX_ZOOM * 100).toLocaleString('en-US') + '%' },

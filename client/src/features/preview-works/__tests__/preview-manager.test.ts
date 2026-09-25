@@ -108,19 +108,19 @@ describe('PreviewManager', () => {
     expect(openedPreviews).toEqual(['work-a']);
 
     // 2. Server responds with ABIERTA for work-a
-    manager.onAbierta('work-a', {
+    manager.onWorkOpened('work-a', {
       handle: 101,
       width: 1920,
       height: 1080,
-      estratos: 11,
+      strata: 11,
       edition: 1,
-      techoEstrato: 10,
-      techoBandas: 4,
-      semillaAncho: 4,
-      semillaAlto: 4,
+      ceilingStratum: 10,
+      ceilingBands: 4,
+      seedWidth: 4,
+      seedHeight: 4,
     });
 
-    // 3. Server streams delivery 1 (semilla)
+    // 3. Server streams delivery 1 (seed)
     const seedBytes = await makeSeedDelivery(101, 4, 4);
     const consumed = manager.onDelivery(seedBytes);
     expect(consumed).toBe(true);

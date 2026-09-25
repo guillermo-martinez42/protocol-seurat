@@ -49,11 +49,11 @@ export function ViewerMinimap({ api, view, iw, ih, ready, sink, paintTick }: Pro
         hasThumb = true;
         for (const rec of brushes) {
           if (!rec.rgba) continue;
-          const { s, bx, by } = splitBrushId(rec.brushId);
-          if (s === 10) {
+          const { stratum, bx, by } = splitBrushId(rec.brushId);
+          if (stratum === 10) {
             c.drawImage(rec.rgba, 0, 0, iw * k, ih * k);
           } else {
-            const size = 256 * 2 ** s;
+            const size = 256 * 2 ** stratum;
             c.drawImage(rec.rgba, bx * size * k, by * size * k, size * k, size * k);
           }
         }

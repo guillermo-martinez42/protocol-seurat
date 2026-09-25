@@ -4,26 +4,26 @@ import { DeliverySink } from '@/app/providers/delivery-sink';
 import { encodeFrame } from '@/shared/proto/frame';
 import {
   T,
-  bienvenidaCore,
-  bienvenidaTlvs,
-  obraCore,
-  abiertaCore,
-  concesionCore,
+  welcomeCore,
+  welcomeTlvs,
+  workCore,
+  openedCore,
+  concessionCore,
   planCore,
   scrapeCore,
   auditCore,
-  abrirDecode,
+  openDecode,
   scrapedDecode,
   inventoryDecode,
   releaseDecode,
-  type WorkMsg,
+  type WorkMessage,
 } from '@/shared/proto/messages';
 import { makeBrushId } from '@/shared/proto/brush';
 import { crc32c } from '@/shared/codec/crc32c';
 import { concat, viDecode, viEncode } from '@/shared/proto/varint';
 import type { SeuratTransport } from '@/shared/api/transport';
 
-function makePinceladaBytes(handle: number, delivery: number, brushId: bigint): Uint8Array {
+function makeBrushBytes(handle: number, delivery: number, brushId: bigint): Uint8Array {
   const band = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
   const c = crc32c(band);
   const bIdBuf = new Uint8Array(8);
@@ -49,45 +49,45 @@ function makePinceladaBytes(handle: number, delivery: number, brushId: bigint): 
 describe('End-to-End Protocol Flow Integration', () => {
   it('executes full session, catalog, open, delivery, audit, and eviction cycle', async () => {
     const sentControl: Uint8Array[] = [];
-    const sentMiradas: Uint8Array[] = [];
+    const sentGazes: Uint8Array[] = [];
 
     const transport: SeuratTransport = {
       name: 'websocket',
-      datagramas: false,
+      supportsDatagrams: false,
       onControl: null,
       onDelivery: null,
       onClose: null,
       sendControl(f: Uint8Array) {
         sentControl.push(f);
       },
-      sendMiradaDatagram(d: Uint8Array) {
-        sentMiradas.push(d);
+      sendGazeDatagram(d: Uint8Array) {
+        sentGazes.push(d);
       },
       close() {},
     };
 
-    const works: WorkMsg[] = [];
+    const works: WorkMessage[] = [];
     let activeHandle: number | null = null;
     let activeEpoch: number | null = null;
 
     let sink!: DeliverySink;
     const client = new SessionClient({
-      onBienvenida: () => {},
-      onObra: (o) => works.push(o),
-      onAbierta: (a) => {
+      onWelcome: () => {},
+      onWork: (o) => works.push(o),
+      onWorkOpened: (a) => {
         activeHandle = a.handle;
       },
-      onConcesion: (c) => {
+      onConcession: (c) => {
         activeEpoch = c.epoch;
       },
       onPlan: () => {},
-      onRaspar: (r) => sink.applyRaspar(r, () => performance.now()),
-      onRenovar: (r) => sink.applyRenovar(r.ranges, r.order, r.leaseS, () => performance.now()),
-      onAuditar: (a) => {
+      onScrape: (r) => sink.applyScrape(r, () => performance.now()),
+      onRenew: (r) => sink.applyRenew(r.ranges, r.order, r.leaseS, () => performance.now()),
+      onAudit: (a) => {
         const inv = sink.inventory(a.through);
         client.sendInventory(a.handle, a.order, a.through, inv.brushCount, inv.kib, inv.ranges);
       },
-      onProtoError: () => {},
+      onProtocolError: () => {},
       onDelivery: (d) => sink.ingest(d, () => performance.now(), () => {}, 30),
       onStatus: () => {},
     });
@@ -110,60 +110,60 @@ describe('End-to-End Protocol Flow Integration', () => {
       sessionId: 0xfeedfacecafe0001n,
       lado: 256,
       leaseS: 60,
-      latidoS: 10,
-      maxEnVuelo: 16,
-      sesionMaxPinceladas: 1000,
-      ticket: new TextEncoder().encode('test-fiche'),
+      heartbeatS: 10,
+      maxInFlight: 16,
+      sessionMaxBrushes: 1000,
+      ticket: new TextEncoder().encode('test-ticket'),
       resumed: [],
     };
-    const bienvenida = encodeFrame(
+    const welcome = encodeFrame(
       T.BIENVENIDA,
-      concat(bienvenidaCore(b), ...bienvenidaTlvs(b)),
+      concat(welcomeCore(b), ...welcomeTlvs(b)),
     );
-    transport.onControl?.(bienvenida);
+    transport.onControl?.(welcome);
 
     // 2. Catalog: Server delivers OBRA metadata
-    const obra1 = encodeFrame(
+    const work1 = encodeFrame(
       T.OBRA,
-      obraCore({
+      workCore({
         event: 1, // ALTA
-        estado: 3, // DISPONIBLE
-        progreso: 100,
+        state: 3, // DISPONIBLE
+        progress: 100,
         edition: 1,
         width: 8000,
         height: 6000,
-        estratos: 8,
+        strata: 8,
         id: 'work-01',
         name: 'Sunday Afternoon',
       }),
     );
-    transport.onControl?.(obra1);
+    transport.onControl?.(work1);
     expect(works.length).toBe(1);
     expect(works[0]?.id).toBe('work-01');
     expect(works[0]?.name).toBe('Sunday Afternoon');
 
     // 3. Open work: Client sends ABRIR
-    client.openObra('work-01');
+    client.openWork('work-01');
     expect(sentControl.length).toBe(1);
-    const abrirFrame = sentControl[0]!;
-    const hType = viDecode(abrirFrame, 0);
+    const openFrame = sentControl[0]!;
+    const hType = viDecode(openFrame, 0);
     expect(hType.value).toBe(T.ABRIR);
-    expect(abrirDecode(abrirFrame.slice(hType.next + 1))).toBe('work-01');
+    expect(openDecode(openFrame.slice(hType.next + 1))).toBe('work-01');
 
     // Server responds with ABIERTA + initial CONCESION
     transport.onControl?.(
       encodeFrame(
         T.ABIERTA,
-        abiertaCore({
+        openedCore({
           handle: 1,
           width: 8000,
           height: 6000,
-          estratos: 8,
+          strata: 8,
           edition: 1,
-          techoEstrato: 8,
-          techoBandas: 4,
-          semillaAncho: 192,
-          semillaAlto: 160,
+          ceilingStratum: 8,
+          ceilingBands: 4,
+          seedWidth: 192,
+          seedHeight: 160,
         }),
       ),
     );
@@ -172,11 +172,11 @@ describe('End-to-End Protocol Flow Integration', () => {
     transport.onControl?.(
       encodeFrame(
         T.CONCESION,
-        concesionCore({
+        concessionCore({
           handle: 1,
           epoch: 1,
-          estratoMin: 0,
-          bandasMax: 4,
+          minStratum: 0,
+          maxBands: 4,
           reason: 0,
           maxBrushes: 64,
           maxKiB: 4096,
@@ -187,8 +187,8 @@ describe('End-to-End Protocol Flow Integration', () => {
     expect(activeEpoch).toBe(1);
 
     // 4. Client reports MIRADA; Server sends PLAN
-    transport.sendMiradaDatagram(new Uint8Array([1, 2, 3]));
-    expect(sentMiradas.length).toBe(1);
+    transport.sendGazeDatagram(new Uint8Array([1, 2, 3]));
+    expect(sentGazes.length).toBe(1);
 
     transport.onControl?.(
       encodeFrame(
@@ -207,8 +207,8 @@ describe('End-to-End Protocol Flow Integration', () => {
     // 5. Stream deliveries into sink
     const pId1 = makeBrushId(7, 0, 0);
     const pId2 = makeBrushId(7, 1, 0);
-    sink.ingest(makePinceladaBytes(1, 1, pId1), () => performance.now(), () => {}, 30);
-    sink.ingest(makePinceladaBytes(1, 2, pId2), () => performance.now(), () => {}, 30);
+    sink.ingest(makeBrushBytes(1, 1, pId1), () => performance.now(), () => {}, 30);
+    sink.ingest(makeBrushBytes(1, 2, pId2), () => performance.now(), () => {}, 30);
 
     expect(sink.book.byDelivery.has(1)).toBe(true);
     expect(sink.book.byDelivery.has(2)).toBe(true);
@@ -256,12 +256,12 @@ describe('End-to-End Protocol Flow Integration', () => {
     const rasp = scrapedDecode(raspFrame.slice(raspType.next + 1));
     expect(rasp.handle).toBe(1);
     expect(rasp.order).toBe(99);
-    expect(rasp.raspadas).toBe(2);
-    expect(rasp.conservadas).toEqual([]);
+    expect(rasp.scrapedCount).toBe(2);
+    expect(rasp.kept).toEqual([]);
     expect(sink.book.byDelivery.size).toBe(0);
 
     // 8. Lease expiry: add a delivery with past expires timestamp
-    sink.ingest(makePinceladaBytes(1, 10, pId1), () => performance.now(), () => {}, 30);
+    sink.ingest(makeBrushBytes(1, 10, pId1), () => performance.now(), () => {}, 30);
     const rec = sink.book.byDelivery.get(10)!;
     rec.expires = performance.now() - 500; // already expired
     sentControl.length = 0;
@@ -271,13 +271,13 @@ describe('End-to-End Protocol Flow Integration', () => {
     await new Promise((resolve) => setTimeout(resolve, 150));
 
     expect(sentControl.length).toBe(1);
-    const soltFrame = sentControl[0]!;
-    const soltType = viDecode(soltFrame, 0);
-    expect(soltType.value).toBe(T.SOLTAR);
-    const solt = releaseDecode(soltFrame.slice(soltType.next + 1));
-    expect(solt.handle).toBe(1);
-    expect(solt.reason).toBe(3); // CADUCADA
-    expect(solt.ranges).toEqual([10]);
+    const releaseFrame = sentControl[0]!;
+    const releaseType = viDecode(releaseFrame, 0);
+    expect(releaseType.value).toBe(T.SOLTAR);
+    const rel = releaseDecode(releaseFrame.slice(releaseType.next + 1));
+    expect(rel.handle).toBe(1);
+    expect(rel.reason).toBe(3); // CADUCADA
+    expect(rel.ranges).toEqual([10]);
 
     sink.dispose();
   });

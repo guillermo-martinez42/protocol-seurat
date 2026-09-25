@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useLayoutEffect } from 'react';
 import { GalleryHero } from '@/widgets/GalleryHero';
 import { GalleryGrid } from '@/widgets/GalleryGrid';
 import { filterWorks } from '@/entities/work/store';
-import { goViewer } from '@/app/router';
+import { galleryScroll, goViewer } from '@/app/router';
 import { patchUi, useUi } from '@/app/store';
 import { useSeurat } from '@/app/providers/SeuratProvider';
 import styles from './GalleryPage.module.css';
@@ -30,6 +30,11 @@ export function GalleryPage(): JSX.Element {
     }
     return [...s].sort();
   }, [works]);
+
+  useLayoutEffect(() => {
+    const y = galleryScroll();
+    if (y > 0) window.scrollTo(0, y);
+  }, []);
 
   return (
     <div className={styles.page}>

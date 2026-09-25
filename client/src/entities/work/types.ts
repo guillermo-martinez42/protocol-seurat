@@ -6,10 +6,10 @@ export interface Work {
   name: string;
   width: number;
   height: number;
-  estratos: number;
-  estado: WorkState;
+  strata: number;
+  state: WorkState;
   edition: number;
-  progreso: number;
+  progress: number;
   tag?: string;
 }
 

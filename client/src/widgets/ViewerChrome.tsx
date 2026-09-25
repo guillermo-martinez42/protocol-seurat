@@ -97,7 +97,7 @@ interface Props {
 
 interface BrushGeom {
   delivery: number;
-  s: number;
+  stratum: number;
   x: number;
   y: number;
   w: number;
@@ -119,6 +119,7 @@ export function ViewerChrome(props: Props): JSX.Element {
   });
   const propsRef = useRef(props);
   propsRef.current = props;
+  const wakeRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -131,6 +132,9 @@ export function ViewerChrome(props: Props): JSX.Element {
     let dpr = 1;
     let raf = 0;
     let dirty = true;
+    wakeRef.current = () => {
+      dirty = true;
+    };
     let dragging = false;
     let last = { x: 0, y: 0, t: 0 };
     let vel = { x: 0, y: 0 };
@@ -200,15 +204,15 @@ export function ViewerChrome(props: Props): JSX.Element {
       const ih = P().ih;
       for (const rec of sink.book.byDelivery.values()) {
         if (!rec.rgba) continue;
-        const { s, bx, by } = splitBrushId(rec.brushId);
-        if (s === 10) {
-          out.push({ delivery: rec.delivery, s, x: 0, y: 0, w: iw, h: ih, bmp: rec.rgba });
+        const { stratum, bx, by } = splitBrushId(rec.brushId);
+        if (stratum === 10) {
+          out.push({ delivery: rec.delivery, stratum, x: 0, y: 0, w: iw, h: ih, bmp: rec.rgba });
         } else {
-          const size = 256 * 2 ** s;
-          out.push({ delivery: rec.delivery, s, x: bx * size, y: by * size, w: size, h: size, bmp: rec.rgba });
+          const size = 256 * 2 ** stratum;
+          out.push({ delivery: rec.delivery, stratum, x: bx * size, y: by * size, w: size, h: size, bmp: rec.rgba });
         }
       }
-      out.sort((a, b) => b.s - a.s);
+      out.sort((a, b) => b.stratum - a.stratum);
       return out;
     }
 
@@ -396,12 +400,12 @@ export function ViewerChrome(props: Props): JSX.Element {
       }
     }
 
-    function reportMirada(): void {
+    function reportGaze(): void {
       const p = P();
       if (!p.gazeService) return;
       const v = st.v;
       const roi = viewToRoi(v.s, v.tx, v.ty, { vw: W, vh: H }, p.iw, p.ih);
-      p.gazeService.motion({ handle: p.handle, x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1, vw: Math.round(W), vh: Math.round(H), mflags: 0 });
+      p.gazeService.motion({ handle: p.handle, x0: roi.x0, y0: roi.y0, x1: roi.x1, y1: roi.y1, vw: Math.round(W), vh: Math.round(H), flags: 0 });
     }
 
     function loop(): void {
@@ -416,7 +420,7 @@ export function ViewerChrome(props: Props): JSX.Element {
         if (moving || dirty) {
           dirty = false;
           syncUI();
-          if (moving) reportMirada();
+          if (moving) reportGaze();
         }
         return;
       }
@@ -424,7 +428,7 @@ export function ViewerChrome(props: Props): JSX.Element {
         dirty = false;
         draw();
         syncUI();
-        if (moving) reportMirada();
+        if (moving) reportGaze();
       }
     }
 
@@ -564,6 +568,7 @@ export function ViewerChrome(props: Props): JSX.Element {
       cv.removeEventListener('dblclick', onDbl);
       window.removeEventListener('keydown', onKey);
       ptrs.clear();
+      wakeRef.current = () => undefined;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.iw, props.ih, props.handle]);
@@ -572,6 +577,11 @@ export function ViewerChrome(props: Props): JSX.Element {
     stateRef.current.iw = props.iw;
     stateRef.current.ih = props.ih;
   }, [props.iw, props.ih]);
+
+  // New deliveries and renderer toggles must repaint even when the view is idle.
+  useEffect(() => {
+    wakeRef.current();
+  }, [props.paintTick, props.sink, props.loupe, props.dots, props.dotThreshold, props.maxZoom]);
 
   return (
     <canvas
