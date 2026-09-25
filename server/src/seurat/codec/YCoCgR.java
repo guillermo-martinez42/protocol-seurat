@@ -23,10 +23,15 @@ public final class YCoCgR {
             int dst, int n) {
         for (int i = 0; i < n; i++) {
             int p = rgb[off + i];
-            int[] v = forward((p >> 16) & 0xFF, (p >> 8) & 0xFF, p & 0xFF);
-            y[dst + i] = v[0];
-            co[dst + i] = v[1];
-            cg[dst + i] = v[2];
+            int r = (p >> 16) & 0xFF;
+            int g = (p >> 8) & 0xFF;
+            int b = p & 0xFF;
+            int c_o = r - b;
+            int t = b + (c_o >> 1);
+            int c_g = g - t;
+            y[dst + i] = t + (c_g >> 1);
+            co[dst + i] = c_o;
+            cg[dst + i] = c_g;
         }
     }
 }

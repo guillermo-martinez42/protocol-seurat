@@ -104,11 +104,16 @@ public final class PngReader implements MasterReader {
     @Override
     public int height() { return height; }
 
+    private int[][] bandBuffer;
+
     @Override
     public int[][] next() throws IOException {
         if (row >= height) return null;
         int n = Math.min(256, height - row);
-        int[][] band = new int[n][width];
+        if (bandBuffer == null) {
+            bandBuffer = new int[256][width];
+        }
+        int[][] band = (n == 256) ? bandBuffer : java.util.Arrays.copyOf(bandBuffer, n);
         if (streaming) {
             int rowBytes = width * bpp;
             for (int y = 0; y < n; y++) {

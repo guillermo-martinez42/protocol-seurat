@@ -18,4 +18,5 @@ if java -version 2>&1 | grep -q 'version "20\.'; then
 fi
 
 javac "${FLAGS[@]}" -d .seurat/build/classes $(find server/src -name '*.java')
-exec java "${RUN_FLAGS[@]}" -Xmx2G -cp .seurat/build/classes seurat.SeuratServer "$@"
+HEAP="${SEURAT_HEAP:--Xmx4G}"
+exec java "${RUN_FLAGS[@]}" $HEAP ${JAVA_OPTS:-} -cp .seurat/build/classes seurat.SeuratServer "$@"

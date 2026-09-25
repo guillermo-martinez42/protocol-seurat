@@ -40,16 +40,10 @@ final class Drain {
         int[][][] vd = new int[3][1][128 * w2];
         int[][][] dd = new int[3][1][128 * w2];
         for (int c = 0; c < 3; c++) {
-            int[] src = new int[256 * a.width];
-            for (int y = 0; y < 256; y++) {
-                for (int x = 0; x < a.width; x++) {
-                    src[y * a.width + x] = a.plane[c][y][x];
-                }
-            }
             int[] h = new int[128 * w2];
             int[] v = new int[128 * w2];
             int[] d = new int[128 * w2];
-            TransformS.blockForward(src, a.width, 256, ps[c], v, h, d);
+            TransformS.blockForward(a.plane[c], a.width, 256, ps[c], v, h, d);
             hd[c][0] = h;
             vd[c][0] = v;
             dd[c][0] = d;

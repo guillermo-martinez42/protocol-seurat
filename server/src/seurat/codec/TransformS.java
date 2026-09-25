@@ -28,14 +28,38 @@ public final class TransformS {
             int[] ps, int[] pv, int[] ph, int[] pd) {
         int hw = w / 2;
         for (int y = 0; y < h; y += 2) {
+            int y0 = y * w, y1 = (y + 1) * w, rowOut = (y / 2) * hw;
             for (int x = 0; x < w; x += 2) {
-                int[] v = forward(src[y * w + x], src[y * w + x + 1],
-                        src[(y + 1) * w + x], src[(y + 1) * w + x + 1]);
-                int o = (y / 2) * hw + x / 2;
-                ps[o] = v[0];
-                pv[o] = v[1];
-                ph[o] = v[2];
-                pd[o] = v[3];
+                int a = src[y0 + x], b = src[y0 + x + 1];
+                int c = src[y1 + x], d = src[y1 + x + 1];
+                int l1 = (a + b) >> 1, h1 = a - b;
+                int l2 = (c + d) >> 1, h2 = c - d;
+                int o = rowOut + (x / 2);
+                ps[o] = (l1 + l2) >> 1;
+                pv[o] = l1 - l2;
+                ph[o] = (h1 + h2) >> 1;
+                pd[o] = h1 - h2;
+            }
+        }
+    }
+
+    /** Block forward directly on 2D scanline short planes without flattening. */
+    public static void blockForward(short[][] src, int w, int h,
+            int[] ps, int[] pv, int[] ph, int[] pd) {
+        int hw = w / 2;
+        for (int y = 0; y < h; y += 2) {
+            short[] r0 = src[y], r1 = src[y + 1];
+            int rowOut = (y / 2) * hw;
+            for (int x = 0; x < w; x += 2) {
+                int a = r0[x], b = r0[x + 1];
+                int c = r1[x], d = r1[x + 1];
+                int l1 = (a + b) >> 1, h1 = a - b;
+                int l2 = (c + d) >> 1, h2 = c - d;
+                int o = rowOut + (x / 2);
+                ps[o] = (l1 + l2) >> 1;
+                pv[o] = l1 - l2;
+                ph[o] = (h1 + h2) >> 1;
+                pd[o] = h1 - h2;
             }
         }
     }
