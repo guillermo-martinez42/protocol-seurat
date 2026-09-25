@@ -1,7 +1,6 @@
 package seurat.catalog;
 
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -9,16 +8,15 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
-import seurat.ingest.IngestJob;
 import seurat.proto.MsgCatalog;
 import seurat.proto.ProtoCodes;
 import seurat.store.BrushStore;
-import seurat.store.FileBrushStore;
 
 /** id -> work map + meta.json. Pushes OBRA to sessions (Observer). */
 public final class Catalog {
     private final Path worksDir;
     private final Map<String, WorkRecord> records = new ConcurrentHashMap<>();
+    private final Map<String, Integer> lastPct = new ConcurrentHashMap<>();
     private final List<Consumer<MsgCatalog.WorkMessage>> listeners =
             new CopyOnWriteArrayList<>();
 
@@ -43,7 +41,11 @@ public final class Catalog {
 
     public void progress(String id, int pct) {
         WorkRecord work = records.get(id);
-        if (work != null) {
+        if (work == null) {
+            return;
+        }
+        Integer previous = lastPct.put(id, pct);
+        if (previous == null || previous != pct) {
             emit(message(work, ProtoCodes.OBRA_ESTADO, pct));
         }
     }
@@ -73,6 +75,7 @@ public final class Catalog {
 
     public void withdraw(String id) {
         WorkRecord work = records.remove(id);
+        lastPct.remove(id);
         if (work != null) {
             emit(new MsgCatalog.WorkMessage(ProtoCodes.OBRA_BAJA, ProtoCodes.ST_RETIRADA,
                     0, work.meta.edition(), work.meta.width(), work.meta.height(),
@@ -84,45 +87,20 @@ public final class Catalog {
         return records.get(id);
     }
 
+    /** One skip rule for intake + job: LISTA with a usable store. */
+    public boolean isCompleted(String id) {
+        WorkRecord r = records.get(id);
+        return r != null && r.store != null && r.meta != null
+                && r.meta.state() == ProtoCodes.ST_LISTA;
+    }
+
     public Iterable<WorkRecord> all() {
         return records.values();
     }
 
     /** Restart recovery: rebuild LISTA stores, truncate to the index. */
     public void load() throws IOException {
-        if (!Files.exists(worksDir)) return;
-        try (var walk = Files.walk(worksDir)) {
-            for (Path meta : walk.filter(p -> p.getFileName().toString().equals("meta.json")).toList()) {
-                Path dir = meta.getParent();
-                if (dir.getFileName().toString().equals("ed1")) continue;
-                String defaultId = worksDir.relativize(dir).toString().replace('\\', '/');
-                var info = MetaJson.read(defaultId, Files.readString(meta));
-                WorkRecord work = new WorkRecord(info);
-                if (info.strata() > 0 && readyState(info.state())) {
-                    int top = info.strata() - 1;
-                    int[] nx = new int[top];
-                    int[] ny = new int[top];
-                    for (int stratum = 0; stratum < top; stratum++) {
-                        nx[stratum] = IngestJob.div256(IngestJob.padTo(info.width(), top)
-                                >> stratum);
-                        ny[stratum] = IngestJob.div256(IngestJob.padTo(info.height(), top)
-                                >> stratum);
-                    }
-                    Path storeDir = info.edition() == 1 && Files.exists(dir.resolve("ed1"))
-                            ? dir.resolve("ed1")
-                            : dir;
-                    Path seed = storeDir.resolve("semilla.bin");
-                    if (Files.isRegularFile(seed) && Files.size(seed) > 4) {
-                        work.store = new FileBrushStore(storeDir, info, nx, ny);
-                    }
-                }
-                records.put(info.id(), work);
-            }
-        }
-    }
-
-    private static boolean readyState(int state) {
-        return state == ProtoCodes.ST_BOCETO || state == ProtoCodes.ST_LISTA;
+        records.putAll(WorkRecovery.readAll(worksDir));
     }
 
     private MsgCatalog.WorkMessage message(WorkRecord work, int event, int progress) {

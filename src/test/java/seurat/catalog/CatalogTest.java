@@ -21,14 +21,20 @@ public final class CatalogTest {
                 "ALTA pushed");
         TestKit.check(Files.exists(root.resolve("w1/meta.json")), "meta.json persisted");
         catalog.progress("w1", 42);
-        TestKit.check(seen.size() == 2 && seen.get(1).progress() == 42, "ESTADO progress");
+        TestKit.check(seen.size() == 2 && seen.get(1).progress() == 42,
+                "first progress pushes ESTADO (put returns null)");
+        catalog.progress("w1", 42);
+        TestKit.check(seen.size() == 2, "same pct not re-emitted");
+        catalog.progress("w1", 57);
+        TestKit.check(seen.size() == 3 && seen.get(2).progress() == 57, "changed pct emits");
         catalog.list("w1");
-        TestKit.check(seen.size() == 3 && seen.get(2).event() == ProtoCodes.OBRA_EDICION,
+        TestKit.check(seen.size() == 4 && seen.get(3).event() == ProtoCodes.OBRA_EDICION,
                 "EDICION pushed");
         catalog.withdraw("w1");
-        TestKit.check(seen.size() == 4 && seen.get(3).event() == ProtoCodes.OBRA_BAJA
+        TestKit.check(seen.size() == 5 && seen.get(4).event() == ProtoCodes.OBRA_BAJA
                 && catalog.get("w1") == null, "BAJA pushed + removed");
         catalog.progress("missing", 1);
+        TestKit.check(seen.size() == 5, "unknown id silent");
         testLoadRecovery();
         System.out.println("CatalogTest OK");
     }

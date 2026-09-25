@@ -36,9 +36,7 @@ public final class IngestJob implements Runnable {
     @Override
     public void run() {
         try {
-            WorkRecord existing = catalog.get(id);
-            if (existing != null && existing.store != null
-                    && existing.meta.state() == ProtoCodes.ST_LISTA) {
+            if (catalog.isCompleted(id)) {
                 Log.info("ingest", "Work already completed, skipping: " + id);
                 return;
             }

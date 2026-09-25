@@ -64,8 +64,7 @@ public final class MasterIntake {
     }
 
     private boolean isLista(String id) {
-        WorkRecord r = catalog.get(id);
-        return r != null && r.meta != null && r.meta.state() == ProtoCodes.ST_LISTA;
+        return catalog.isCompleted(id);
     }
 
     /** Edition swap: point canvases at ed2, re-issue concession, replan without withdrawing. */
