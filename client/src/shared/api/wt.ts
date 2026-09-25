@@ -39,7 +39,7 @@ async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 
 export class WtTransport implements SeuratTransport {
   readonly name = 'webtransport' as const;
-  readonly datagramas = true;
+  readonly supportsDatagrams = true;
   onControl: ControlHandler | null = null;
   onDelivery: DeliveryHandler | null = null;
   onClose: CloseHandler | null = null;
@@ -146,7 +146,7 @@ export class WtTransport implements SeuratTransport {
     this.ctrlWriter?.write(frame).catch(() => this.onClose?.('wt control write failed'));
   }
 
-  sendMiradaDatagram(payload: Uint8Array): void {
+  sendGazeDatagram(payload: Uint8Array): void {
     this.dgWriter?.write(payload).catch(() => undefined);
   }
 

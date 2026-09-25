@@ -5,22 +5,22 @@ export interface CanvasInfo {
   workId: string;
   width: number;
   height: number;
-  estratos: number;
+  strata: number;
   edition: number;
-  techoEstrato: number;
-  techoBandas: number;
-  semillaAncho: number;
-  semillaAlto: number;
+  ceilingStratum: number;
+  ceilingBands: number;
+  seedWidth: number;
+  seedHeight: number;
   concession: Concession | null;
 }
 
-export function permite(c: Concession, s: number, b1: number): boolean {
-  if (s > c.estratoMin) return true;
-  if (s === c.estratoMin) return b1 <= c.bandasMax;
+export function allowsAt(c: Concession, s: number, b1: number): boolean {
+  if (s > c.minStratum) return true;
+  if (s === c.minStratum) return b1 <= c.maxBands;
   return false;
 }
 
-export function makeLienzo(
+export function makeCanvas(
   handle: number,
   workId: string,
   dims: Omit<CanvasInfo, 'handle' | 'workId' | 'concession'>,

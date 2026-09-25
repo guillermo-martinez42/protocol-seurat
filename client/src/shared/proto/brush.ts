@@ -1,7 +1,7 @@
 import { u32Decode, u64Decode, viDecode } from './varint';
 import { crc32c } from '../codec/crc32c';
 
-export const PINCELADA_TIPO = 0x01;
+export const FLOW_PINCELADA = 0x01;
 
 export interface BrushHead {
   handle: number;
@@ -19,7 +19,7 @@ export interface BrushHead {
   headerBytes: number;
 }
 
-export function splitBrushId(id: bigint): { stratum: number; s: number; bx: number; by: number } {
+export function splitBrushId(id: bigint): { stratum: number; bx: number; by: number } {
   const stratum = Number((id >> 56n) & 0xffn);
   let morton = id & 0xffffffffffffffn;
   let bx = 0;
@@ -29,7 +29,7 @@ export function splitBrushId(id: bigint): { stratum: number; s: number; bx: numb
     if ((morton & 2n) !== 0n) by |= 1 << i;
     morton >>= 2n;
   }
-  return { stratum, s: stratum, bx, by };
+  return { stratum, bx, by };
 }
 
 export function makeBrushId(stratum: number, bx: number, by: number): bigint {
@@ -44,7 +44,7 @@ export function makeBrushId(stratum: number, bx: number, by: number): bigint {
 export function parseBrushHead(bytes: Uint8Array): BrushHead {
   let p = 0;
   let r = viDecode(bytes, p);
-  if (r.value !== PINCELADA_TIPO) throw new Error('brush: bad tipo_flujo');
+  if (r.value !== FLOW_PINCELADA) throw new Error('brush: bad tipo_flujo');
   p = r.next;
   r = viDecode(bytes, p); const handle = r.value; p = r.next;
   r = viDecode(bytes, p); const delivery = r.value; p = r.next;

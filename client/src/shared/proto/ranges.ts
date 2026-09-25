@@ -2,7 +2,7 @@ import { concat, viDecode, viEncode } from './varint';
 
 export function rangesEncode(sorted: number[]): Uint8Array {
   const nums = [...new Set(sorted)].filter((n) => n >= 1).sort((a, b) => a - b);
-  if (nums.length === 0) return Uint8Array.from(viEncode(0));
+  if (nums.length === 0) return new Uint8Array([0x00, 0x00, 0x00]);
   const mayor = nums[nums.length - 1] ?? 0;
   const gaps: Array<[number, number]> = [];
   let rangeStart = nums[0] ?? mayor;
@@ -55,7 +55,15 @@ export function rangesDecode(bytes: Uint8Array, pos: number): { values: number[]
   let cur = viDecode(bytes, pos);
   const mayor = cur.value;
   pos = cur.next;
-  if (mayor === 0) return { values: [], next: pos };
+  if (mayor === 0) {
+    if (pos < bytes.length) {
+      cur = viDecode(bytes, pos); pos = cur.next;
+      if (pos < bytes.length) {
+        cur = viDecode(bytes, pos); pos = cur.next;
+      }
+    }
+    return { values: [], next: pos };
+  }
   cur = viDecode(bytes, pos);
   const nHuecos = cur.value;
   pos = cur.next;

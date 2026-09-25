@@ -12,14 +12,14 @@ export const T = {
 export const CAP_DATAGRAMAS = 0x01;
 export const CAP_REANUDAR = 0x02;
 
-export interface ReanudarClaim { handle: number; ranges: number[] }
-export interface Saludo {
-  verMin: number; verMax: number; caps: number; memMib: number; token: Uint8Array;
-  resume?: { sesionAnterior: bigint; ticket: Uint8Array; claims: ReanudarClaim[] };
+export interface ResumeClaim { handle: number; ranges: number[] }
+export interface Hello {
+  minVersion: number; maxVersion: number; caps: number; memMib: number; token: Uint8Array;
+  resume?: { previousSession: bigint; ticket: Uint8Array; claims: ResumeClaim[] };
 }
-export interface Bienvenida {
+export interface Welcome {
   version: number; caps: number; sessionId: bigint; lado: number; leaseS: number;
-  latidoS: number; maxEnVuelo: number; sesionMaxPinceladas: number;
+  heartbeatS: number; maxInFlight: number; sessionMaxBrushes: number;
   ticket: Uint8Array; resumed: number[];
 }
 
@@ -30,17 +30,17 @@ function hexToBytes(hex: string): Uint8Array {
 }
 export { hexToBytes };
 
-export function saludoCore(s: Saludo): Uint8Array {
+export function helloCore(s: Hello): Uint8Array {
   return concat(
-    viEncode(s.verMin), viEncode(s.verMax), viEncode(s.caps), viEncode(s.memMib),
+    viEncode(s.minVersion), viEncode(s.maxVersion), viEncode(s.caps), viEncode(s.memMib),
     viEncode(s.token.length), s.token,
   );
 }
 
-export function saludoTlvs(s: Saludo): Uint8Array[] {
+export function helloTlvs(s: Hello): Uint8Array[] {
   if (!s.resume) return [];
   const parts: Array<number[] | Uint8Array> = [
-    u64Encode(s.resume.sesionAnterior),
+    u64Encode(s.resume.previousSession),
     s.resume.ticket,
     viEncode(s.resume.claims.length),
   ];
@@ -48,41 +48,41 @@ export function saludoTlvs(s: Saludo): Uint8Array[] {
   return [tlvEncode(0x01, concat(...parts))];
 }
 
-export function saludoDecode(payload: Uint8Array): Saludo {
+export function helloDecode(payload: Uint8Array): Hello {
   let p = 0;
-  let r = viDecode(payload, p); const verMin = r.value; p = r.next;
-  r = viDecode(payload, p); const verMax = r.value; p = r.next;
+  let r = viDecode(payload, p); const minVersion = r.value; p = r.next;
+  r = viDecode(payload, p); const maxVersion = r.value; p = r.next;
   r = viDecode(payload, p); const caps = r.value; p = r.next;
   r = viDecode(payload, p); const memMib = r.value; p = r.next;
   r = viDecode(payload, p); const tokenLen = r.value; p = r.next;
   const token = payload.slice(p, p + tokenLen); p += tokenLen;
-  const out: Saludo = { verMin, verMax, caps, memMib, token };
+  const out: Hello = { minVersion, maxVersion, caps, memMib, token };
   for (const t of parseTlvs(payload.slice(p))) {
     if (t.tag !== 0x01) continue;
     let q = 0;
     const s64 = u64Decode(t.value, q); q = s64.next;
     const ticket = t.value.slice(q, q + 32); q += 32;
     const n = viDecode(t.value, q); q = n.next;
-    const claims: ReanudarClaim[] = [];
+    const claims: ResumeClaim[] = [];
     for (let i = 0; i < n.value; i++) {
       const h = viDecode(t.value, q); q = h.next;
       const rr = rangesDecode(t.value, q); q = rr.next;
       claims.push({ handle: h.value, ranges: rr.values });
     }
-    out.resume = { sesionAnterior: s64.value, ticket, claims };
+    out.resume = { previousSession: s64.value, ticket, claims };
   }
   return out;
 }
 
-export function bienvenidaCore(b: Bienvenida): Uint8Array {
+export function welcomeCore(b: Welcome): Uint8Array {
   return concat(
     viEncode(b.version), viEncode(b.caps), u64Encode(b.sessionId), viEncode(b.lado),
-    viEncode(b.leaseS), viEncode(b.latidoS), viEncode(b.maxEnVuelo),
-    viEncode(b.sesionMaxPinceladas),
+    viEncode(b.leaseS), viEncode(b.heartbeatS), viEncode(b.maxInFlight),
+    viEncode(b.sessionMaxBrushes),
   );
 }
 
-export function bienvenidaTlvs(b: Bienvenida): Uint8Array[] {
+export function welcomeTlvs(b: Welcome): Uint8Array[] {
   const out = [tlvEncode(0x02, b.ticket)];
   if (b.resumed.length > 0) {
     out.push(tlvEncode(0x03, concat(viEncode(b.resumed.length), ...b.resumed.map((h) => viEncode(h)))));
@@ -90,19 +90,19 @@ export function bienvenidaTlvs(b: Bienvenida): Uint8Array[] {
   return out;
 }
 
-export function bienvenidaDecode(payload: Uint8Array): Bienvenida {
+export function welcomeDecode(payload: Uint8Array): Welcome {
   let p = 0;
   let r = viDecode(payload, p); const version = r.value; p = r.next;
   r = viDecode(payload, p); const caps = r.value; p = r.next;
   const sid = u64Decode(payload, p); p = sid.next;
   r = viDecode(payload, p); const lado = r.value; p = r.next;
   r = viDecode(payload, p); const leaseS = r.value; p = r.next;
-  r = viDecode(payload, p); const latidoS = r.value; p = r.next;
-  r = viDecode(payload, p); const maxEnVuelo = r.value; p = r.next;
-  r = viDecode(payload, p); const sesionMaxPinceladas = r.value; p = r.next;
-  const out: Bienvenida = {
-    version, caps, sessionId: sid.value, lado, leaseS, latidoS,
-    maxEnVuelo, sesionMaxPinceladas, ticket: new Uint8Array(0), resumed: [],
+  r = viDecode(payload, p); const heartbeatS = r.value; p = r.next;
+  r = viDecode(payload, p); const maxInFlight = r.value; p = r.next;
+  r = viDecode(payload, p); const sessionMaxBrushes = r.value; p = r.next;
+  const out: Welcome = {
+    version, caps, sessionId: sid.value, lado, leaseS, heartbeatS,
+    maxInFlight, sessionMaxBrushes, ticket: new Uint8Array(0), resumed: [],
   };
   for (const t of parseTlvs(payload.slice(p))) {
     if (t.tag === 0x02) out.ticket = t.value;
@@ -118,103 +118,103 @@ export function bienvenidaDecode(payload: Uint8Array): Bienvenida {
   return out;
 }
 
-export function latidoCore(nonce: bigint): Uint8Array {
+export function heartbeatCore(nonce: bigint): Uint8Array {
   return Uint8Array.from(u64Encode(nonce));
 }
-export function latidoDecode(payload: Uint8Array): bigint {
+export function heartbeatDecode(payload: Uint8Array): bigint {
   return u64Decode(payload, 0).value;
 }
-export function ecoCore(nonce: bigint): Uint8Array {
+export function echoCore(nonce: bigint): Uint8Array {
   return Uint8Array.from(u64Encode(nonce));
 }
-export function ecoDecode(payload: Uint8Array): bigint {
+export function echoDecode(payload: Uint8Array): bigint {
   return u64Decode(payload, 0).value;
 }
 
-export interface ProtoError { codigo: number; fatal: number; refTipo: number; msg: string }
-export function errorCore(e: ProtoError): Uint8Array {
-  return concat(viEncode(e.codigo), [e.fatal], viEncode(e.refTipo), strEncode(e.msg));
+export interface ProtocolError { code: number; fatal: number; refType: number; msg: string }
+export function errorCore(e: ProtocolError): Uint8Array {
+  return concat(viEncode(e.code), [e.fatal], viEncode(e.refType), strEncode(e.msg));
 }
-export function errorDecode(payload: Uint8Array): ProtoError {
+export function errorDecode(payload: Uint8Array): ProtocolError {
   let p = 0;
-  let r = viDecode(payload, p); const codigo = r.value; p = r.next;
+  let r = viDecode(payload, p); const code = r.value; p = r.next;
   const fatal = payload[p] ?? 0; p += 1;
-  r = viDecode(payload, p); const refTipo = r.value; p = r.next;
+  r = viDecode(payload, p); const refType = r.value; p = r.next;
   const s = strDecode(payload, p);
-  return { codigo, fatal, refTipo, msg: s.value };
+  return { code, fatal, refType, msg: s.value };
 }
 
-export interface Adios { codigo: number; msg: string }
-export function adiosCore(a: Adios): Uint8Array {
-  return concat(viEncode(a.codigo), strEncode(a.msg));
+export interface Goodbye { code: number; msg: string }
+export function goodbyeCore(a: Goodbye): Uint8Array {
+  return concat(viEncode(a.code), strEncode(a.msg));
 }
-export function adiosDecode(payload: Uint8Array): Adios {
+export function goodbyeDecode(payload: Uint8Array): Goodbye {
   const c = viDecode(payload, 0);
   const s = strDecode(payload, c.next);
-  return { codigo: c.value, msg: s.value };
+  return { code: c.value, msg: s.value };
 }
 
-export interface WorkMsg {
-  event: number; estado: number; progreso: number; edition: number;
-  width: number; height: number; estratos: number; id: string; name: string;
+export interface WorkMessage {
+  event: number; state: number; progress: number; edition: number;
+  width: number; height: number; strata: number; id: string; name: string;
 }
-export function obraCore(o: WorkMsg): Uint8Array {
+export function workCore(o: WorkMessage): Uint8Array {
   return concat(
-    [o.event, o.estado, o.progreso], viEncode(o.edition), viEncode(o.width),
-    viEncode(o.height), [o.estratos], strEncode(o.id), strEncode(o.name),
+    [o.event, o.state, o.progress], viEncode(o.edition), viEncode(o.width),
+    viEncode(o.height), [o.strata], strEncode(o.id), strEncode(o.name),
   );
 }
-export function obraDecode(payload: Uint8Array): WorkMsg {
+export function workDecode(payload: Uint8Array): WorkMessage {
   let p = 0;
-  const event = payload[p] ?? 0; const estado = payload[p + 1] ?? 0; const progreso = payload[p + 2] ?? 0; p += 3;
+  const event = payload[p] ?? 0; const state = payload[p + 1] ?? 0; const progress = payload[p + 2] ?? 0; p += 3;
   let r = viDecode(payload, p); const edition = r.value; p = r.next;
   r = viDecode(payload, p); const width = r.value; p = r.next;
   r = viDecode(payload, p); const height = r.value; p = r.next;
-  const estratos = payload[p] ?? 0; p += 1;
+  const strata = payload[p] ?? 0; p += 1;
   const id = strDecode(payload, p); p = id.next;
   const name = strDecode(payload, p);
-  return { event, estado, progreso, edition, width, height, estratos, id: id.value, name: name.value };
+  return { event, state, progress, edition, width, height, strata, id: id.value, name: name.value };
 }
 
-export function abrirCore(id: string): Uint8Array {
+export function openCore(id: string): Uint8Array {
   return strEncode(id);
 }
-export function abrirDecode(payload: Uint8Array): string {
+export function openDecode(payload: Uint8Array): string {
   return strDecode(payload, 0).value;
 }
 
-export interface Abierta {
-  handle: number; width: number; height: number; estratos: number; edition: number;
-  techoEstrato: number; techoBandas: number; semillaAncho: number; semillaAlto: number;
+export interface WorkOpened {
+  handle: number; width: number; height: number; strata: number; edition: number;
+  ceilingStratum: number; ceilingBands: number; seedWidth: number; seedHeight: number;
 }
-export function abiertaCore(a: Abierta): Uint8Array {
+export function openedCore(a: WorkOpened): Uint8Array {
   return concat(
-    viEncode(a.handle), viEncode(a.width), viEncode(a.height), [a.estratos],
-    viEncode(a.edition), [a.techoEstrato, a.techoBandas],
-    viEncode(a.semillaAncho), viEncode(a.semillaAlto),
+    viEncode(a.handle), viEncode(a.width), viEncode(a.height), [a.strata],
+    viEncode(a.edition), [a.ceilingStratum, a.ceilingBands],
+    viEncode(a.seedWidth), viEncode(a.seedHeight),
   );
 }
-export function abiertaDecode(payload: Uint8Array): Abierta {
+export function openedDecode(payload: Uint8Array): WorkOpened {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
   r = viDecode(payload, p); const width = r.value; p = r.next;
   r = viDecode(payload, p); const height = r.value; p = r.next;
-  const estratos = payload[p] ?? 0; p += 1;
+  const strata = payload[p] ?? 0; p += 1;
   r = viDecode(payload, p); const edition = r.value; p = r.next;
-  const techoEstrato = payload[p] ?? 0; const techoBandas = payload[p + 1] ?? 0; p += 2;
-  r = viDecode(payload, p); const semillaAncho = r.value; p = r.next;
-  r = viDecode(payload, p); const semillaAlto = r.value; p = r.next;
-  return { handle, width, height, estratos, edition, techoEstrato, techoBandas, semillaAncho, semillaAlto };
+  const ceilingStratum = payload[p] ?? 0; const ceilingBands = payload[p + 1] ?? 0; p += 2;
+  r = viDecode(payload, p); const seedWidth = r.value; p = r.next;
+  r = viDecode(payload, p); const seedHeight = r.value; p = r.next;
+  return { handle, width, height, strata, edition, ceilingStratum, ceilingBands, seedWidth, seedHeight };
 }
 
 export interface Gaze {
   handle: number; seq: number; x0: number; y0: number; x1: number; y1: number;
-  vw: number; vh: number; mflags: number;
+  vw: number; vh: number; flags: number;
 }
 export function gazeCore(m: Gaze): Uint8Array {
   return concat(
     viEncode(m.handle), viEncode(m.seq), viEncode(m.x0), viEncode(m.y0),
-    viEncode(m.x1), viEncode(m.y1), viEncode(m.vw), viEncode(m.vh), [m.mflags],
+    viEncode(m.x1), viEncode(m.y1), viEncode(m.vw), viEncode(m.vh), [m.flags],
   );
 }
 export function gazeDecode(payload: Uint8Array): Gaze {
@@ -228,29 +228,29 @@ export function gazeDecode(payload: Uint8Array): Gaze {
   return {
     handle: vals[0] ?? 0, seq: vals[1] ?? 0, x0: vals[2] ?? 0, y0: vals[3] ?? 0,
     x1: vals[4] ?? 0, y1: vals[5] ?? 0, vw: vals[6] ?? 0, vh: vals[7] ?? 0,
-    mflags: payload[p] ?? 0,
+    flags: payload[p] ?? 0,
   };
 }
 
 export interface Concession {
-  handle: number; epoch: number; estratoMin: number; bandasMax: number; reason: number;
+  handle: number; epoch: number; minStratum: number; maxBands: number; reason: number;
   maxBrushes: number; maxKiB: number; leaseS: number;
 }
-export function concesionCore(c: Concession): Uint8Array {
+export function concessionCore(c: Concession): Uint8Array {
   return concat(
-    viEncode(c.handle), viEncode(c.epoch), [c.estratoMin, c.bandasMax, c.reason],
+    viEncode(c.handle), viEncode(c.epoch), [c.minStratum, c.maxBands, c.reason],
     viEncode(c.maxBrushes), viEncode(c.maxKiB), viEncode(c.leaseS),
   );
 }
-export function concesionDecode(payload: Uint8Array): Concession {
+export function concessionDecode(payload: Uint8Array): Concession {
   let p = 0;
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
   r = viDecode(payload, p); const epoch = r.value; p = r.next;
-  const estratoMin = payload[p] ?? 0; const bandasMax = payload[p + 1] ?? 0; const reason = payload[p + 2] ?? 0; p += 3;
+  const minStratum = payload[p] ?? 0; const maxBands = payload[p + 1] ?? 0; const reason = payload[p + 2] ?? 0; p += 3;
   r = viDecode(payload, p); const maxBrushes = r.value; p = r.next;
   r = viDecode(payload, p); const maxKiB = r.value; p = r.next;
   r = viDecode(payload, p); const leaseS = r.value; p = r.next;
-  return { handle, epoch, estratoMin, bandasMax, reason, maxBrushes, maxKiB, leaseS };
+  return { handle, epoch, minStratum, maxBands, reason, maxBrushes, maxKiB, leaseS };
 }
 
 export type PlanMsg =
@@ -300,8 +300,8 @@ export function scrapeParamsLowStratum(stratum: number): Uint8Array {
 export function scrapeParamsOutside(x0: number, y0: number, x1: number, y1: number): Uint8Array {
   return concat(viEncode(x0), viEncode(y0), viEncode(x1), viEncode(y1));
 }
-export function scrapeParamsBands(stratum: number, bandasMax: number): Uint8Array {
-  return Uint8Array.from([stratum, bandasMax]);
+export function scrapeParamsBands(stratum: number, maxBands: number): Uint8Array {
+  return Uint8Array.from([stratum, maxBands]);
 }
 export function scrapeParamsList(ranges: number[]): Uint8Array {
   return rangesEncode(ranges);
@@ -309,12 +309,12 @@ export function scrapeParamsList(ranges: number[]): Uint8Array {
 
 export interface Scraped {
   handle: number; order: number; epoch: number; through: number;
-  raspadas: number; liberadasKib: number; conservadas: number[];
+  scrapedCount: number; freedKib: number; kept: number[];
 }
 export function scrapedCore(r: Scraped): Uint8Array {
   return concat(
     viEncode(r.handle), viEncode(r.order), viEncode(r.epoch), viEncode(r.through),
-    viEncode(r.raspadas), viEncode(r.liberadasKib), rangesEncode(r.conservadas),
+    viEncode(r.scrapedCount), viEncode(r.freedKib), rangesEncode(r.kept),
   );
 }
 export function scrapedDecode(payload: Uint8Array): Scraped {
@@ -323,17 +323,17 @@ export function scrapedDecode(payload: Uint8Array): Scraped {
   r = viDecode(payload, p); const order = r.value; p = r.next;
   r = viDecode(payload, p); const epoch = r.value; p = r.next;
   r = viDecode(payload, p); const through = r.value; p = r.next;
-  r = viDecode(payload, p); const raspadas = r.value; p = r.next;
-  r = viDecode(payload, p); const liberadasKib = r.value; p = r.next;
+  r = viDecode(payload, p); const scrapedCount = r.value; p = r.next;
+  r = viDecode(payload, p); const freedKib = r.value; p = r.next;
   const rr = rangesDecode(payload, p);
-  return { handle, order, epoch, through, raspadas, liberadasKib, conservadas: rr.values };
+  return { handle, order, epoch, through, scrapedCount, freedKib, kept: rr.values };
 }
 
-export interface Receipt { handle: number; completed: number[]; queueMs: number; libre: number; renewThrough: number }
+export interface Receipt { handle: number; completed: number[]; queueMs: number; free: number; renewThrough: number }
 export function receiptCore(r: Receipt): Uint8Array {
   return concat(
     viEncode(r.handle), rangesEncode(r.completed), viEncode(r.queueMs),
-    viEncode(r.libre), viEncode(r.renewThrough),
+    viEncode(r.free), viEncode(r.renewThrough),
   );
 }
 export function receiptDecode(payload: Uint8Array): Receipt {
@@ -341,9 +341,9 @@ export function receiptDecode(payload: Uint8Array): Receipt {
   let r = viDecode(payload, p); const handle = r.value; p = r.next;
   const rr = rangesDecode(payload, p); p = rr.next;
   r = viDecode(payload, p); const queueMs = r.value; p = r.next;
-  r = viDecode(payload, p); const libre = r.value; p = r.next;
+  r = viDecode(payload, p); const free = r.value; p = r.next;
   r = viDecode(payload, p);
-  return { handle, completed: rr.values, queueMs, libre, renewThrough: r.value };
+  return { handle, completed: rr.values, queueMs, free, renewThrough: r.value };
 }
 
 export interface Release { handle: number; reason: number; ranges: number[] }

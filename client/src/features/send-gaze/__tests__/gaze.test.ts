@@ -2,22 +2,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { GazeSender } from '@/features/send-gaze';
 import type { SeuratTransport } from '@/shared/api/transport';
 
-function fakeTransport(datagramas: boolean) {
+function fakeTransport(supportsDatagrams: boolean) {
   const t = {
-    datagramas,
+    supportsDatagrams,
     control: [] as Uint8Array[],
     datagrams: [] as Uint8Array[],
     sendControl(f: Uint8Array): void {
       this.control.push(f);
     },
-    sendMiradaDatagram(p: Uint8Array): void {
+    sendGazeDatagram(p: Uint8Array): void {
       this.datagrams.push(p);
     },
   };
   return t;
 }
 
-const base = { handle: 1, x0: 0, y0: 0, x1: 100, y1: 100, vw: 200, vh: 200, mflags: 0 };
+const base = { handle: 1, x0: 0, y0: 0, x1: 100, y1: 100, vw: 200, vh: 200, flags: 0 };
 
 describe('send-gaze', () => {
   beforeEach(() => {
