@@ -92,11 +92,6 @@ public final class MasterIntake {
         Thread.ofVirtual().start(() -> {
             try {
                 scan(config.inbox);
-                Path imgDir = Path.of("img");
-                if (Files.exists(imgDir) && !config.inbox.toAbsolutePath().normalize()
-                        .equals(imgDir.toAbsolutePath().normalize())) {
-                    scan(imgDir);
-                }
                 var watcher = config.inbox.getFileSystem().newWatchService();
                 config.inbox.register(watcher, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE);
                 Log.info("ingest", "Inbox file watcher active on " + config.inbox.toAbsolutePath());

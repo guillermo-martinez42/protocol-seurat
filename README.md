@@ -19,23 +19,30 @@ An asynchronous, server-authoritative protocol and viewer for streaming gigapixe
 .
 ├── server/src/seurat/          # Java 21 backend (single-responsibility modules <150 LoC)
 ├── server/test/seurat/         # Backend test suite (wire goldens and invariant tests <300 LoC)
-├── client/                      # Modern React + TypeScript viewer (Feature-Sliced Design)
-│   ├── src/                     # FSD layers (app, pages, widgets, features, entities, shared)
-│   └── dist/                    # Compiled static production bundle
+├── client/                     # Modern React + TypeScript viewer (Feature-Sliced Design)
+│   ├── src/                    # FSD layers (app, pages, widgets, features, entities, shared)
+│   └── dist/                   # Compiled static production bundle
 ├── scripts/
-│   ├── run-tests.sh             # Compiles & executes backend tests + checks LoC budgets
-│   ├── check-loc.sh             # Validates strict line-of-code budgets
-│   └── clean.sh                 # Cleans ephemeral build artifacts without touching runtime data
-├── run.sh                       # One-command server builder & launcher
-└── seurat.conf                  # Runtime server configuration
+│   ├── run-tests.sh            # Compiles & executes backend tests + checks LoC budgets
+│   ├── check-loc.sh            # Validates strict line-of-code budgets
+│   └── clean.sh                # Cleans ephemeral build artifacts without touching runtime data
+├── run.sh                      # Bash server builder & launcher (Linux / macOS / WSL)
+├── run.ps1                     # PowerShell server builder & launcher (Windows)
+├── seurat.conf                 # Runtime server configuration
+└── .seurat/                    # Unified runtime data and build outputs (uncommitted)
+    ├── runtime/
+    │   ├── inbox/              # Watched drop folder for raw master images & zip archives
+    │   ├── obras/              # Processed multi-scale pyramidal strata & seed binaries
+    │   └── cobertura/          # Persistent principal coverage token buckets
+    └── build/                  # Compiled Java classes and test classes
 ```
 
 ---
 
 ## Prerequisites
 
-- **Java 21 JDK**: Required for virtual threads, pattern matching, and modern NIO.
-- **Node.js (v20+) & pnpm**: Required for building or developing the frontend client (`node -v >= 20`, `pnpm >= 9`).
+- **Java 21 JDK**: Required for virtual threads, pattern matching, and modern NIO (or Java 20 with `--enable-preview`).
+- **Node.js (v20+) & pnpm**: Required for building or developing the frontend client (`node -v >= 20`, `pnpm >= 9` or `npm`).
 
 ---
 
@@ -45,20 +52,26 @@ An asynchronous, server-authoritative protocol and viewer for streaming gigapixe
 
 Run the unified bootstrap script from the repository root:
 
+**Linux / macOS / WSL (Bash):**
 ```bash
 bash run.sh
 ```
 
+**Windows (PowerShell):**
+```powershell
+./run.ps1
+```
+
 This script automatically:
-1. Rebuilds the frontend client if a Node toolchain is present (or serves pre-built assets).
+1. Rebuilds the frontend client if a Node toolchain is present (or serves pre-built assets in `client/dist/`).
 2. Compiles the Java backend using standard `javac` (zero external Maven/Gradle downloads).
-3. Boots the asynchronous server on the configured port (default `8080`).
+3. Boots the asynchronous server on the configured port (default `8180` in `seurat.conf`).
 
 ### 2. Open the Viewer
 
 Open your browser and navigate to:
 ```
-http://localhost:8080/
+http://localhost:8180/
 ```
 
 The server serves the compiled Single Page Application (`client/dist/`) and manages WebSocket connections on `/seurat/v1/lienzo-ws`.
@@ -70,11 +83,15 @@ The server serves the compiled Single Page Application (`client/dist/`) and mana
 Images can be ingested into the pyramid store in two ways:
 
 ### Option A: Local Inbox Drop (Automatic Ingest)
-Place any PNG or TIFF image directly into the `.seurat/runtime/inbox/` directory:
+Place any PNG, JPEG, TIFF image, or `.zip` archive directly into the `.seurat/runtime/inbox/` directory:
 ```bash
-cp /path/to/my-image.png .seurat/runtime/inbox/mona-lisa
+cp /path/to/my-image.png .seurat/runtime/inbox/mona-lisa.png
 ```
-The server's intake watcher will detect the file, construct the multi-stratum pyramidal brushes and seed (`semilla.bin`), and register it in the work catalog (`.seurat/runtime/obras/`).
+Or drop a multi-image zip archive:
+```bash
+cp /path/to/archive.zip .seurat/runtime/inbox/
+```
+The server's background intake watcher will detect the file, unpack zip archives into `.seurat/runtime/inbox/<archive>.d/` caches, construct multi-stratum pyramidal brushes and seed (`semilla.bin`), and register each work in the catalog (`.seurat/runtime/obras/`).
 
 ### Option B: HTTP Admin REST API
 Upload an image with the admin token configured in `seurat.conf`:
@@ -82,7 +99,7 @@ Upload an image with the admin token configured in `seurat.conf`:
 curl -X PUT \
   -H "X-Admin-Token: cambia-esto" \
   --data-binary @/path/to/my-image.png \
-  http://localhost:8080/seurat/v1/obras/mona-lisa
+  http://localhost:8180/seurat/v1/obras/mona-lisa
 ```
 
 To update role-based density ceilings for a work:
@@ -91,14 +108,14 @@ curl -X PUT \
   -H "X-Admin-Token: cambia-esto" \
   -H "Content-Type: application/json" \
   -d '{"anonimo":[2,4],"autenticado":[1,4],"privilegiado":[0,4]}' \
-  http://localhost:8080/seurat/v1/obras/mona-lisa/politica
+  http://localhost:8180/seurat/v1/obras/mona-lisa/politica
 ```
 
 To withdraw and delete a work:
 ```bash
 curl -X DELETE \
   -H "X-Admin-Token: cambia-esto" \
-  http://localhost:8080/seurat/v1/obras/mona-lisa
+  http://localhost:8180/seurat/v1/obras/mona-lisa
 ```
 
 ---
@@ -116,7 +133,7 @@ If you are developing the frontend client with hot-module reloading:
    cd client
    pnpm dev
    ```
-   Open `http://localhost:5173/` in your browser. The Vite development proxy connects directly to the backend at `http://localhost:8080/`.
+   Open `http://localhost:5173/` in your browser. The Vite development proxy connects directly to the backend.
 
 ---
 
@@ -126,21 +143,22 @@ Server parameters can be customized in `seurat.conf`:
 
 | Setting | Default | Description |
 | :--- | :--- | :--- |
-| `http.port` | `8080` | Port for HTTP static files, handshake, and WebSocket traffic. |
-| `inbox` | `.seurat/runtime/inbox` | Directory watched for incoming image intake. |
+| `http.port` | `8180` | Port for HTTP static files, handshake, and WebSocket traffic (protocol default `8080`). |
+| `inbox` | `.seurat/runtime/inbox` | Directory watched for incoming image and archive intake. |
 | `works` | `.seurat/runtime/obras` | Directory containing committed multi-scale work packages. |
 | `coverage` | `.seurat/runtime/cobertura` | Persistent principal coverage tracking (fine strata token buckets). |
 | `admin.token` | `cambia-esto` | Token required for admin REST routes (`X-Admin-Token`). |
 | `eviction.policy` | `lru` | Voluntary eviction policy SPI implementation. |
 | `session.max_brushes`| `1024` | Maximum concurrent active brush grants per session. |
 | `rate.bytes_per_s` | `25000000` | Global egress bandwidth cap (bytes/sec). |
+| `log.level` | `INFO` | Console logging verbosity (`TRACE`, `DEBUG`, `INFO`, `WARN`, `ERROR`). |
 
 ---
 
 ## Running Verification & Tests
 
 ### Backend Tests (JDK 21)
-To run all 27 unit tests, golden wire vectors, loopback tests, and LoC budget validations:
+To run all 31 unit tests, golden wire vectors, loopback tests, and LoC budget validations:
 ```bash
 bash scripts/run-tests.sh
 ```
@@ -154,6 +172,13 @@ bash scripts/check-loc.sh
 To run all client test suites and verify production build:
 ```bash
 cd client
-pnpm test          # Runs all 61 Vitest unit and integration tests
+pnpm test          # Runs all 67 Vitest unit and integration tests across 12 test suites
 pnpm build         # Validates TypeScript types and generates production bundle
+```
+
+### Cleaning Build Artifacts
+To clean build outputs without touching runtime data:
+```bash
+bash scripts/clean.sh            # Cleans .seurat/build/ (.class files)
+bash scripts/clean.sh --runtime  # Also cleans .seurat/runtime/cobertura/ and unpacked .d caches
 ```
