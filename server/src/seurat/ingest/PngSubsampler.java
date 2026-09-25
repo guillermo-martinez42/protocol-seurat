@@ -42,8 +42,7 @@ final class PngSubsampler {
             byte[] prev = new byte[w * bp];
             int rowBytes = w * bp;
             var inf = new java.util.zip.Inflater();
-            try {
-                DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536));
+            try (DataInputStream sl = new DataInputStream(new InflaterInputStream(new IdatInputStream(dis), inf, 65536))) {
                 for (int y = 0; y < h; y++) {
                     int filter = sl.readUnsignedByte();
                     sl.readFully(cur);

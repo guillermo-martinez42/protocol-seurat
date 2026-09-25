@@ -70,9 +70,12 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work '" + id + "' ed2 pyramid completed, work ready (ST_LISTA)");
             }
             onReady.run();
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             Log.error("ingest", "Ingest failed for '" + id + "': " + ex.getMessage(), ex);
-            AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
+            try {
+                AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
+            } catch (Throwable ignored) {
+            }
             WorkRecord work = catalog.get(id);
             if (work != null) {
                 catalog.sketch(id, work.store, ProtoCodes.ST_FALLIDA, work.meta.edition());

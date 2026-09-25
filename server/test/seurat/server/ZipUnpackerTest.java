@@ -1,6 +1,5 @@
 package seurat.server;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,6 +14,7 @@ public final class ZipUnpackerTest {
         testSkipPredicate();
         testReuseExisting();
         testFormatBytes();
+        testEmptyAndCorrupt();
         System.out.println("ZipUnpackerTest OK");
     }
 
@@ -58,6 +58,19 @@ public final class ZipUnpackerTest {
         TestKit.check(ZipUnpacker.formatBytes(2048).contains("KiB"), "kib format");
         TestKit.check(ZipUnpacker.formatBytes(5_000_000).contains("MiB"), "mib format");
         TestKit.check(ZipUnpacker.formatBytes(5_000_000_000L).contains("GiB"), "gib format");
+    }
+
+    private static void testEmptyAndCorrupt() throws Exception {
+        Path tempDir = Files.createTempDirectory("zip-test-empty");
+        Path emptyZip = tempDir.resolve("empty.zip");
+        Files.createFile(emptyZip);
+        List<Path> res1 = ZipUnpacker.unpack(emptyZip, null);
+        TestKit.check(res1.isEmpty(), "empty zip returns empty list without error");
+
+        Path corruptZip = tempDir.resolve("corrupt.zip");
+        Files.write(corruptZip, new byte[]{1, 2, 3, 4, 5});
+        List<Path> res2 = ZipUnpacker.unpack(corruptZip, null);
+        TestKit.check(res2.isEmpty(), "corrupt zip returns empty list without error");
     }
 
     private static void createZip(Path zip, List<String> entryNames) throws IOException {

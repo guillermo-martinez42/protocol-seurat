@@ -73,7 +73,7 @@ final class DeliveryWriter {
                             + " (session " + session.id() + ")");
                 }
             }
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             Log.warn("paint", "Delivery failed on canvas " + canvas.handle()
                     + " delivery #" + delivery.number() + ": " + ex.getMessage());
             boolean wasInBook;

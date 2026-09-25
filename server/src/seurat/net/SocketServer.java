@@ -43,11 +43,11 @@ public final class SocketServer {
                     String remote = String.valueOf(socket.getRemoteSocketAddress());
                     try {
                         handle(socket, remote);
-                    } catch (Exception ex) {
+                    } catch (Throwable ex) {
                         Log.debug("net", "Connection closed/error from " + remote + ": " + ex.getMessage());
                         try {
                             socket.close();
-                        } catch (Exception alsoIgnored) {
+                        } catch (Throwable alsoIgnored) {
                         }
                     }
                 });

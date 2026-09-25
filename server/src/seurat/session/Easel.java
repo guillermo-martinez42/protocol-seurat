@@ -59,7 +59,7 @@ public final class Easel implements Runnable {
             if (session != null) {
                 fail(session, fail.code, fail.refType);
             }
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             String detail = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             Log.error("session", "Session error [session " + (session == null ? "?" : session.id())
                     + "]: " + detail, ex);

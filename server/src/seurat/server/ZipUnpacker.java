@@ -23,6 +23,10 @@ final class ZipUnpacker {
     private ZipUnpacker() {}
 
     static List<Path> unpack(Path zip, Predicate<String> skip) throws Exception {
+        if (!Files.exists(zip) || Files.size(zip) < 22) {
+            Log.warn("ingest", "Zip archive " + zip.getFileName() + " is empty or incomplete, skipping");
+            return List.of();
+        }
         Path dir = zip.getParent().resolve(zip.getFileName() + ".d");
         Files.createDirectories(dir);
         List<Path> list = new ArrayList<>();
@@ -58,6 +62,9 @@ final class ZipUnpacker {
                 list.add(out);
                 extracted++;
             }
+        } catch (java.util.zip.ZipException ex) {
+            Log.warn("ingest", "Zip archive " + zip.getFileName() + " cannot be read: " + ex.getMessage());
+            return List.of();
         }
         long elapsed = System.currentTimeMillis() - totalStart;
         if (extracted > 0) {

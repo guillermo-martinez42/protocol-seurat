@@ -1,8 +1,7 @@
 package seurat.server;
 
-import java.util.List;
-import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.Executor;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
@@ -24,6 +23,7 @@ public final class MasterIntake {
     private final GrantController grants;
     private final SeuratConfig config;
     private final Executor ingest;
+    private final InboxWatcher watcher;
 
     public MasterIntake(Catalog catalog, Sessions sessions, GrantController grants,
             SeuratConfig config, Executor ingest) {
@@ -32,11 +32,29 @@ public final class MasterIntake {
         this.grants = grants;
         this.config = config;
         this.ingest = ingest;
+        this.watcher = new InboxWatcher(config.inbox, this::offer);
     }
 
     public void offer(String id, Path file) {
-        Log.info("ingest", "Queueing ingest for '" + id + "' (" + file.getFileName() + ")");
-        ingest.execute(() -> launch(id, file));
+        Thread.ofVirtual().start(() -> {
+            if (!file.toString().endsWith(".zip") && isLista(id)) {
+                Log.info("ingest", "Work already completed, skipping: " + id);
+                watcher.done(file);
+                return;
+            }
+            if (!FileTransferWaiter.waitForReady(file)) {
+                watcher.done(file);
+                return;
+            }
+            Log.info("ingest", "Queueing ingest for '" + id + "' (" + file.getFileName() + ")");
+            ingest.execute(() -> {
+                try {
+                    launch(id, file);
+                } finally {
+                    watcher.done(file);
+                }
+            });
+        });
     }
 
     private void launch(String id, Path file) {
@@ -63,9 +81,12 @@ public final class MasterIntake {
             }
             new IngestJob(id, name, file, config.works, catalog,
                     () -> substitute(id)).run();
-        } catch (Exception ex) {
+        } catch (Throwable ex) {
             Log.error("ingest", "Ingest failed for " + id + ": " + ex.getMessage(), ex);
-            AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
+            try {
+                AuditLog.alert("ingest failed " + id + ": " + ex.getMessage());
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -76,9 +97,7 @@ public final class MasterIntake {
     /** Edition swap: point canvases at ed2, re-issue concession, replan without withdrawing. */
     private void substitute(String id) {
         WorkRecord work = catalog.get(id);
-        if (work == null) {
-            return;
-        }
+        if (work == null) return;
         Log.info("ingest", "Swapping edition for work '" + id + "' across active canvases");
         for (Session session : sessions.all()) {
             for (Canvas canvas : session.canvases().values()) {
@@ -95,50 +114,6 @@ public final class MasterIntake {
     }
 
     public void watch() {
-        Thread.ofVirtual().start(() -> {
-            try {
-                scan(config.inbox);
-                var watcher = config.inbox.getFileSystem().newWatchService();
-                config.inbox.register(watcher, java.nio.file.StandardWatchEventKinds.ENTRY_CREATE);
-                Log.info("ingest", "Inbox file watcher active on " + config.inbox.toAbsolutePath());
-                for (;;) {
-                    var key = watcher.take();
-                    for (var event : key.pollEvents()) {
-                        offerIfMaster(event.context().toString());
-                    }
-                    key.reset();
-                }
-            } catch (Exception ex) {
-                Log.error("ingest", "Inbox watcher error: " + ex.getMessage(), ex);
-                AuditLog.alert("inbox watch failed: " + ex.getMessage());
-            }
-        });
-    }
-
-    private void scan(Path root) {
-        if (!Files.exists(root)) return;
-        try (var walk = Files.walk(root)) {
-            for (Path file : walk.filter(Files::isRegularFile).toList()) {
-                String rel = root.relativize(file).toString().replace('\\', '/');
-                if (rel.contains(".d/") || rel.startsWith(".d/")) continue;
-                String lower = file.getFileName().toString().toLowerCase();
-                if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
-                        || lower.endsWith(".zip")) {
-                    offer(rel.replaceAll("\\.[^.]+$", ""), file);
-                }
-            }
-        } catch (Exception ex) {
-            Log.error("ingest", "Scan failed on " + root + ": " + ex.getMessage());
-        }
-    }
-
-    private void offerIfMaster(String name) {
-        if (name.endsWith(".d") || name.endsWith(".tmp") || name.contains(".d/")) return;
-        String lower = name.toLowerCase();
-        if (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".tif")
-                || lower.endsWith(".zip")) {
-            Log.info("ingest", "Detected master image in inbox: " + name);
-            offer(name, config.inbox.resolve(name));
-        }
+        watcher.start();
     }
 }
