@@ -7,7 +7,7 @@ export interface Tlv {
 }
 
 export interface Frame {
-  tipo: number;
+  type: number;
   payload: Uint8Array;
   tlvs: Tlv[];
 }
@@ -38,10 +38,10 @@ export function tlvEncode(tag: number, value: Uint8Array): Uint8Array {
   return concat(viEncode(tag), viEncode(value.length), value);
 }
 
-export function encodeFrame(tipo: number, core: Uint8Array, tlvs: Uint8Array[] = []): Uint8Array {
+export function encodeFrame(type: number, core: Uint8Array, tlvs: Uint8Array[] = []): Uint8Array {
   const payload = concat(core, ...tlvs);
   if (payload.length > MAX_FRAME_BYTES) throw new FatalProtocolError('frame exceeds 64 KiB');
-  return concat(viEncode(tipo), viEncode(payload.length), payload);
+  return concat(viEncode(type), viEncode(payload.length), payload);
 }
 
 export function decodeFrame(bytes: Uint8Array, coreLength: (payload: Uint8Array) => number): Frame | null {
@@ -58,10 +58,10 @@ export function decodeFrame(bytes: Uint8Array, coreLength: (payload: Uint8Array)
     if (t.value < 0x40) throw new FatalProtocolError('ERROR 1: unknown mandatory type');
     return null;
   }
-  return { tipo: t.value, payload, tlvs: parseTlvs(payload.slice(known)) };
+  return { type: t.value, payload, tlvs: parseTlvs(payload.slice(known)) };
 }
 
-export function splitFrame(bytes: Uint8Array): { tipo: number; payload: Uint8Array; total: number } {
+export function splitFrame(bytes: Uint8Array): { type: number; payload: Uint8Array; total: number } {
   let pos = 0;
   const t = viDecode(bytes, pos);
   pos = t.next;
@@ -69,5 +69,5 @@ export function splitFrame(bytes: Uint8Array): { tipo: number; payload: Uint8Arr
   pos = l.next;
   if (l.value > MAX_FRAME_BYTES) throw new FatalProtocolError('frame exceeds 64 KiB');
   if (pos + l.value > bytes.length) throw new Error('frame: need more bytes');
-  return { tipo: t.value, payload: bytes.slice(pos, pos + l.value), total: pos + l.value };
+  return { type: t.value, payload: bytes.slice(pos, pos + l.value), total: pos + l.value };
 }

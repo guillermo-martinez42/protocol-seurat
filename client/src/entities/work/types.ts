@@ -6,10 +6,10 @@ export interface Work {
   name: string;
   width: number;
   height: number;
-  estratos: number;
-  estado: WorkState;
+  strata: number;
+  state: WorkState;
   edition: number;
-  progreso: number;
+  progress: number;
   tag?: string;
 }
 
@@ -22,7 +22,12 @@ export function workDims(w: Work): string {
 }
 
 export function workMp(w: Work): string {
-  return ((w.width * w.height) / 1e6).toFixed(1) + ' MP';
+  const px = w.width * w.height;
+  if (px < 100_000) {
+    return (px / 1e3).toFixed(1) + ' kpx';
+  }
+  const mp = px / 1e6;
+  return (mp < 0.1 ? '< 0.1' : mp.toFixed(1)) + ' MP';
 }
 
 export function workTitle(w: Work, index: number): string {

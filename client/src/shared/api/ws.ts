@@ -1,18 +1,18 @@
-import { MIRADA_MAX_PER_SEC } from '../config/constants';
+import { GAZE_PER_S } from '../config/constants';
 import type { CloseHandler, ControlHandler, DeliveryHandler, SeuratTransport } from './transport';
 
-const CANAL_CONTROL = 0;
-const CANAL_DELIVERY = 1;
-const CANAL_MIRADA = 2;
+const CONTROL_CHANNEL = 0;
+const DELIVERY_CHANNEL = 1;
+const GAZE_CHANNEL = 2;
 
 export class WsTransport implements SeuratTransport {
   readonly name = 'websocket' as const;
-  readonly datagramas = false;
+  readonly supportsDatagrams = false;
   onControl: ControlHandler | null = null;
   onDelivery: DeliveryHandler | null = null;
   onClose: CloseHandler | null = null;
   private ws: WebSocket | null = null;
-  private miradaTimes: number[] = [];
+  private gazeTimes: number[] = [];
 
   constructor(
     private url: string,
@@ -36,10 +36,10 @@ export class WsTransport implements SeuratTransport {
   private route(data: ArrayBuffer): void {
     const bytes = new Uint8Array(data);
     if (bytes.length < 1) return;
-    const canal = bytes[0];
+    const channel = bytes[0];
     const rest = bytes.slice(1);
-    if (canal === CANAL_CONTROL) this.onControl?.(rest);
-    else if (canal === CANAL_DELIVERY) this.onDelivery?.(rest);
+    if (channel === CONTROL_CHANNEL) this.onControl?.(rest);
+    else if (channel === DELIVERY_CHANNEL) this.onDelivery?.(rest);
   }
 
   sendControl(frame: Uint8Array): void {
@@ -47,20 +47,20 @@ export class WsTransport implements SeuratTransport {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     if (ws.bufferedAmount > 256 * 1024) return;
     const out = new Uint8Array(frame.length + 1);
-    out[0] = CANAL_CONTROL;
+    out[0] = CONTROL_CHANNEL;
     out.set(frame, 1);
     ws.send(out);
   }
 
-  sendMiradaDatagram(payload: Uint8Array): void {
+  sendGazeDatagram(payload: Uint8Array): void {
     const now = performance.now();
-    this.miradaTimes = this.miradaTimes.filter((t) => now - t < 1000);
-    if (this.miradaTimes.length >= MIRADA_MAX_PER_SEC) return;
-    this.miradaTimes.push(now);
+    this.gazeTimes = this.gazeTimes.filter((t) => now - t < 1000);
+    if (this.gazeTimes.length >= GAZE_PER_S) return;
+    this.gazeTimes.push(now);
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     const out = new Uint8Array(payload.length + 1);
-    out[0] = CANAL_MIRADA;
+    out[0] = GAZE_CHANNEL;
     out.set(payload, 1);
     ws.send(out);
   }

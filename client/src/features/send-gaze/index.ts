@@ -1,4 +1,4 @@
-import { MIRADA_QUIETA_IDLE_MS } from '@/shared/config/constants';
+import { GAZE_QUIET_IDLE_MS } from '@/shared/config/constants';
 import { gazeCore, T, type Gaze } from '@/shared/proto/messages';
 import { concat, viEncode } from '@/shared/proto/varint';
 import type { SeuratTransport } from '@/shared/api/transport';
@@ -36,14 +36,14 @@ export class GazeSender {
       }
     }
     clearTimeout(this.idleTimer);
-    this.idleTimer = setTimeout(() => this.flush(true), MIRADA_QUIETA_IDLE_MS) as unknown as number;
+    this.idleTimer = setTimeout(() => this.flush(true), GAZE_QUIET_IDLE_MS) as unknown as number;
   }
 
   hidden(handle: number): void {
     this.seq += 1;
     const t = this.transport();
     if (!t) return;
-    const core = gazeCore({ handle, seq: this.seq, x0: 0, y0: 0, x1: 0, y1: 0, vw: 0, vh: 0, mflags: MFLAGS_HIDDEN });
+    const core = gazeCore({ handle, seq: this.seq, x0: 0, y0: 0, x1: 0, y1: 0, vw: 0, vh: 0, flags: MFLAGS_HIDDEN });
     t.sendControl(concat(viEncode(T.MIRADA), viEncode(core.length), core));
     this.pending = null;
   }
@@ -55,12 +55,12 @@ export class GazeSender {
     this.pending = null;
     this.lastSentAt = performance.now();
     if (still) {
-      const core = gazeCore({ ...m, mflags: m.mflags | MFLAGS_STILL });
+      const core = gazeCore({ ...m, flags: m.flags | MFLAGS_STILL });
       t.sendControl(concat(viEncode(T.MIRADA), viEncode(core.length), core));
     } else {
       const core = gazeCore(m);
-      if (t.datagramas) t.sendMiradaDatagram(concat(viEncode(T.MIRADA), core));
-      else t.sendMiradaDatagram(core);
+      if (t.supportsDatagrams) t.sendGazeDatagram(concat(viEncode(T.MIRADA), core));
+      else t.sendGazeDatagram(core);
     }
   }
 

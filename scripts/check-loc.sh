@@ -15,6 +15,6 @@ check() {
     fail=1
   fi
 }
-while IFS= read -r -d '' f; do check "$f" "$MAIN_MAX" "main"; done < <(find "$ROOT/src/main" -name '*.java' -print0 2>/dev/null || true)
-while IFS= read -r -d '' f; do check "$f" "$TEST_MAX" "test"; done < <(find "$ROOT/src/test" -name '*.java' -print0 2>/dev/null || true)
+while IFS= read -r -d '' f; do check "$f" "$MAIN_MAX" "main"; done < <(find "$ROOT/server/src" -name '*.java' -print0 2>/dev/null || true)
+while IFS= read -r -d '' f; do check "$f" "$TEST_MAX" "test"; done < <(find "$ROOT/server/test" -name '*.java' -print0 2>/dev/null || true)
 if [ "$fail" -eq 0 ]; then echo "LoC budgets OK (main<$MAIN_MAX, test<$TEST_MAX)"; else exit 1; fi

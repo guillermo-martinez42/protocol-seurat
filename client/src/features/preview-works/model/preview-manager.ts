@@ -1,7 +1,7 @@
 import { decodeSeed } from '@/shared/codec/seed';
 import { parseBrushHead, sliceBands } from '@/shared/proto/brush';
 import { hasWorkPreview, setWorkPreview } from '@/entities/work/previews';
-import type { Abierta } from '@/shared/proto/messages';
+import type { WorkOpened } from '@/shared/proto/messages';
 import type { SessionClient } from '@/app/providers/session-client';
 
 interface ActivePreview {
@@ -25,6 +25,8 @@ export class PreviewManager {
         this.queue.push(id);
       }
     }
+    const order = new Map(ids.map((id, i) => [id, i]));
+    this.queue.sort((a, b) => (order.get(a) ?? 9999) - (order.get(b) ?? 9999));
     this.pump();
   }
 
@@ -42,11 +44,11 @@ export class PreviewManager {
     this.pump();
   }
 
-  onAbierta(id: string, a: Abierta): void {
+  onWorkOpened(id: string, a: WorkOpened): void {
     if (!this.active || this.active.id !== id) return;
     this.active.handle = a.handle;
-    this.active.w = a.semillaAncho;
-    this.active.h = a.semillaAlto;
+    this.active.w = a.seedWidth;
+    this.active.h = a.seedHeight;
   }
 
   onDelivery(bytes: Uint8Array): boolean {

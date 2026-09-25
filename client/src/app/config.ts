@@ -1,13 +1,13 @@
 export const ENDPOINTS = {
-  sesion: '/seurat/v1/sesion',
+  session: '/seurat/v1/sesion',
 } as const;
 
 export const LIMITS = {
   wtReadyMs: 3000,
-  miradaPerSec: 20,
-  quietaIdleMs: 300,
-  reciboMs: 100,
-  reciboBatch: 8,
+  gazePerSec: 20,
+  quietIdleMs: 300,
+  receiptMs: 100,
+  receiptBatch: 8,
   memMibFallback: 128,
 } as const;
 

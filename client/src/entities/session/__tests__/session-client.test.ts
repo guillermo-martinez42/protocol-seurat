@@ -3,15 +3,15 @@ import { SessionClient } from '@/app/providers/session-client';
 import { encodeFrame } from '@/shared/proto/frame';
 import {
   T,
-  bienvenidaCore,
-  bienvenidaTlvs,
-  latidoCore,
-  obraCore,
-  abiertaCore,
-  concesionCore,
+  welcomeCore,
+  welcomeTlvs,
+  heartbeatCore,
+  workCore,
+  openedCore,
+  concessionCore,
   planCore,
-  ecoDecode,
-  abrirDecode,
+  echoDecode,
+  openDecode,
   receiptDecode,
   releaseDecode,
   inventoryDecode,
@@ -23,14 +23,14 @@ function mockTransport() {
   const sentControl: Uint8Array[] = [];
   const t: SeuratTransport = {
     name: 'websocket',
-    datagramas: false,
+    supportsDatagrams: false,
     onControl: null,
     onDelivery: null,
     onClose: null,
     sendControl(f: Uint8Array) {
       sentControl.push(f);
     },
-    sendMiradaDatagram() {},
+    sendGazeDatagram() {},
     close() {},
   };
   return { t, sentControl };
@@ -40,15 +40,15 @@ describe('SessionClient', () => {
   it('replies to LATIDO with ECO nonce', () => {
     const { t, sentControl } = mockTransport();
     const events = {
-      onBienvenida: () => {},
-      onObra: () => {},
-      onAbierta: () => {},
-      onConcesion: () => {},
+      onWelcome: () => {},
+      onWork: () => {},
+      onWorkOpened: () => {},
+      onConcession: () => {},
       onPlan: () => {},
-      onRaspar: () => {},
-      onRenovar: () => {},
-      onAuditar: () => {},
-      onProtoError: () => {},
+      onScrape: () => {},
+      onRenew: () => {},
+      onAudit: () => {},
+      onProtocolError: () => {},
       onDelivery: () => {},
       onStatus: () => {},
     };
@@ -58,8 +58,8 @@ describe('SessionClient', () => {
     (client as unknown as { wire(t: SeuratTransport): void }).wire(t);
 
     const nonce = 0x123456789abcdef0n;
-    const latidoFrame = encodeFrame(T.LATIDO, latidoCore(nonce));
-    t.onControl?.(latidoFrame);
+    const heartbeatFrame = encodeFrame(T.LATIDO, heartbeatCore(nonce));
+    t.onControl?.(heartbeatFrame);
 
     expect(sentControl.length).toBe(1);
     const reply = sentControl[0];
@@ -68,27 +68,27 @@ describe('SessionClient', () => {
     const s = viDecode(reply!, 0);
     expect(s.value).toBe(T.ECO);
     const payload = reply!.slice(s.next + 1); // skip length varint
-    expect(ecoDecode(payload)).toBe(nonce);
+    expect(echoDecode(payload)).toBe(nonce);
   });
 
   it('dispatches BIENVENIDA, OBRA, ABIERTA, CONCESION, PLAN', () => {
     const { t } = mockTransport();
-    let bienvenidaOk = false;
-    let obraOk = false;
-    let abiertaOk = false;
-    let concesionOk = false;
+    let welcomeOk = false;
+    let workOk = false;
+    let openedOk = false;
+    let concessionOk = false;
     let planOk = false;
 
     const events = {
-      onBienvenida: () => { bienvenidaOk = true; },
-      onObra: () => { obraOk = true; },
-      onAbierta: () => { abiertaOk = true; },
-      onConcesion: () => { concesionOk = true; },
+      onWelcome: () => { welcomeOk = true; },
+      onWork: () => { workOk = true; },
+      onWorkOpened: () => { openedOk = true; },
+      onConcession: () => { concessionOk = true; },
       onPlan: () => { planOk = true; },
-      onRaspar: () => {},
-      onRenovar: () => {},
-      onAuditar: () => {},
-      onProtoError: () => {},
+      onScrape: () => {},
+      onRenew: () => {},
+      onAudit: () => {},
+      onProtocolError: () => {},
       onDelivery: () => {},
       onStatus: () => {},
     };
@@ -98,25 +98,25 @@ describe('SessionClient', () => {
 
     const b = {
       version: 1, caps: 3, sessionId: 100n, lado: 256, leaseS: 120,
-      latidoS: 15, maxEnVuelo: 12, sesionMaxPinceladas: 1024, ticket: new Uint8Array(32), resumed: [],
+      heartbeatS: 15, maxInFlight: 12, sessionMaxBrushes: 1024, ticket: new Uint8Array(32), resumed: [],
     };
-    t.onControl?.(encodeFrame(T.BIENVENIDA, concat(bienvenidaCore(b), ...bienvenidaTlvs(b))));
-    expect(bienvenidaOk).toBe(true);
+    t.onControl?.(encodeFrame(T.BIENVENIDA, concat(welcomeCore(b), ...welcomeTlvs(b))));
+    expect(welcomeOk).toBe(true);
 
-    t.onControl?.(encodeFrame(T.OBRA, obraCore({
-      event: 1, estado: 3, progreso: 100, edition: 1, width: 1000, height: 1000, estratos: 10, id: 'test', name: 'Test',
+    t.onControl?.(encodeFrame(T.OBRA, workCore({
+      event: 1, state: 3, progress: 100, edition: 1, width: 1000, height: 1000, strata: 10, id: 'test', name: 'Test',
     })));
-    expect(obraOk).toBe(true);
+    expect(workOk).toBe(true);
 
-    t.onControl?.(encodeFrame(T.ABIERTA, abiertaCore({
-      handle: 1, width: 1000, height: 1000, estratos: 10, edition: 1, techoEstrato: 0, techoBandas: 4, semillaAncho: 192, semillaAlto: 160,
+    t.onControl?.(encodeFrame(T.ABIERTA, openedCore({
+      handle: 1, width: 1000, height: 1000, strata: 10, edition: 1, ceilingStratum: 0, ceilingBands: 4, seedWidth: 192, seedHeight: 160,
     })));
-    expect(abiertaOk).toBe(true);
+    expect(openedOk).toBe(true);
 
-    t.onControl?.(encodeFrame(T.CONCESION, concesionCore({
-      handle: 1, epoch: 1, estratoMin: 7, bandasMax: 4, reason: 0, maxBrushes: 768, maxKiB: 36864, leaseS: 120,
+    t.onControl?.(encodeFrame(T.CONCESION, concessionCore({
+      handle: 1, epoch: 1, minStratum: 7, maxBands: 4, reason: 0, maxBrushes: 768, maxKiB: 36864, leaseS: 120,
     })));
-    expect(concesionOk).toBe(true);
+    expect(concessionOk).toBe(true);
 
     t.onControl?.(encodeFrame(T.PLAN, planCore({
       handle: 1, gazeSeq: 1, event: 0, first: 1, expectedCount: 10, throttle: 0,
@@ -127,24 +127,24 @@ describe('SessionClient', () => {
   it('sends outgoing control messages properly', () => {
     const { t, sentControl } = mockTransport();
     const client = new SessionClient({
-      onBienvenida: () => {}, onObra: () => {}, onAbierta: () => {}, onConcesion: () => {},
-      onPlan: () => {}, onRaspar: () => {}, onRenovar: () => {}, onAuditar: () => {},
-      onProtoError: () => {}, onDelivery: () => {}, onStatus: () => {},
+      onWelcome: () => {}, onWork: () => {}, onWorkOpened: () => {}, onConcession: () => {},
+      onPlan: () => {}, onScrape: () => {}, onRenew: () => {}, onAudit: () => {},
+      onProtocolError: () => {}, onDelivery: () => {}, onStatus: () => {},
     });
     (client as unknown as { transport: SeuratTransport }).transport = t;
 
-    client.openObra('work-42');
+    client.openWork('work-42');
     expect(sentControl.length).toBe(1);
-    expect(abrirDecode(sentControl[0]!.slice(2))).toBe('work-42');
+    expect(openDecode(sentControl[0]!.slice(2))).toBe('work-42');
 
-    client.sendRecibo(1, [1, 2, 3], 20, 700, 5);
+    client.sendReceipt(1, [1, 2, 3], 20, 700, 5);
     expect(sentControl.length).toBe(2);
     const rec = receiptDecode(sentControl[1]!.slice(2));
     expect(rec.handle).toBe(1);
     expect(rec.queueMs).toBe(20);
-    expect(rec.libre).toBe(700);
+    expect(rec.free).toBe(700);
 
-    client.sendSoltar(1, 1, [4, 5]);
+    client.sendRelease(1, 1, [4, 5]);
     expect(sentControl.length).toBe(3);
     const sol = releaseDecode(sentControl[2]!.slice(2));
     expect(sol.reason).toBe(1);

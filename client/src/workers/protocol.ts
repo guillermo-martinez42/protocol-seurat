@@ -4,8 +4,8 @@ export interface SynthRequest {
   qY: number;
   qC: number;
   seed: boolean;
-  semillaAncho: number;
-  semillaAlto: number;
+  seedWidth: number;
+  seedHeight: number;
   bands: ArrayBuffer[];
 }
 

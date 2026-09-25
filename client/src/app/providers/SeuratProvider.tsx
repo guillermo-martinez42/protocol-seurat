@@ -1,20 +1,24 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SessionClient, type SessionEvents } from './session-client';
 import { DeliverySink } from './delivery-sink';
-import { applyWork } from '@/entities/work/store';
+import { HandleLedgers } from '@/entities/delivery/ledgers';
+import { parseBrushHead, splitBrushId } from '@/shared/proto/brush';
+import { MAX_RETIRED_HANDLES } from '@/shared/config/constants';
+import { clearResume } from '@/entities/session/store';
+import { applyWork, sortWorks } from '@/entities/work/store';
 import type { Work } from '@/entities/work/types';
-import type { Abierta, Bienvenida, Concession, PlanMsg, ProtoError } from '@/shared/proto/messages';
+import type { WorkOpened, Welcome, Concession, PlanMsg, ProtocolError } from '@/shared/proto/messages';
 import { GazeSender } from '@/features/send-gaze';
 import { PreviewManager } from '@/features/preview-works';
 
 export interface SeuratState {
   status: string;
   works: Work[];
-  bienvenida: Bienvenida | null;
-  opened: Abierta | null;
+  welcome: Welcome | null;
+  opened: WorkOpened | null;
   concession: Concession | null;
   plan: PlanMsg | null;
-  lastError: ProtoError | null;
+  lastError: ProtocolError | null;
   paintTick: number;
   client: SessionClient | null;
   sink: DeliverySink | null;
@@ -34,15 +38,16 @@ export function useSeurat(): SeuratState {
 export function SeuratProvider({ children }: { children: ReactNode }): JSX.Element {
   const [status, setStatus] = useState('boot');
   const [works, setWorks] = useState<Work[]>([]);
-  const [bienvenida, setBienvenida] = useState<Bienvenida | null>(null);
-  const [opened, setAbierta] = useState<Abierta | null>(null);
-  const [concession, setConcesion] = useState<Concession | null>(null);
+  const [welcome, setWelcome] = useState<Welcome | null>(null);
+  const [opened, setWorkOpened] = useState<WorkOpened | null>(null);
+  const [concession, setConcession] = useState<Concession | null>(null);
   const [plan, setPlan] = useState<PlanMsg | null>(null);
-  const [lastError, setLastError] = useState<ProtoError | null>(null);
+  const [lastError, setLastError] = useState<ProtocolError | null>(null);
   const [paintTick, setPaintTick] = useState(0);
   const clientRef = useRef<SessionClient | null>(null);
   const sinkRef = useRef<DeliverySink | null>(null);
-  const miradasRef = useRef<GazeSender | null>(null);
+  const ledgersRef = useRef(new HandleLedgers(MAX_RETIRED_HANDLES));
+  const gazesRef = useRef<GazeSender | null>(null);
   const worksRef = useRef(new Map<string, Work>());
   const previewRef = useRef<PreviewManager | null>(null);
 
@@ -51,79 +56,114 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
     const preview = new PreviewManager(() => clientRef.current);
     previewRef.current = preview;
     const events: SessionEvents = {
-      onBienvenida: (b) => {
-        if (alive) setBienvenida(b);
+      onWelcome: (b) => {
+        if (alive) setWelcome(b);
       },
-      onObra: (m) => {
+      onWork: (m) => {
         worksRef.current = applyWork(worksRef.current, m);
-        const list = [...worksRef.current.values()];
+        const list = sortWorks([...worksRef.current.values()]);
         if (alive) {
           setWorks(list);
-          previewRef.current?.enqueue(list.map((w) => w.id));
+          const readyIds = list
+            .filter((w) => w.state === 1 || w.state === 3)
+            .map((w) => w.id);
+          previewRef.current?.enqueue(readyIds);
         }
       },
-      onAbierta: (a) => {
+      onWorkOpened: (a) => {
         if (!alive) return;
         previewRef.current?.pause();
         if (sinkRef.current && sinkRef.current.handle !== a.handle) {
           const prev = sinkRef.current.handle;
+          ledgersRef.current.adopt(prev, sinkRef.current.book);
           sinkRef.current.dispose();
           clientRef.current?.closeHandle(prev);
         }
-        setAbierta(a);
+        setWorkOpened(a);
         const sink = new DeliverySink(
           a.handle,
           () => clientRef.current,
           () => concessionRef.current?.maxKiB ?? 36864,
           () => concessionRef.current?.maxBrushes ?? 768,
-          a.semillaAncho,
-          a.semillaAlto,
+          a.seedWidth,
+          a.seedHeight,
         );
         sinkRef.current = sink;
       },
-      onPreviewAbierta: (id, a) => {
-        previewRef.current?.onAbierta(id, a);
+      onPreviewWorkOpened: (id, a) => {
+        previewRef.current?.onWorkOpened(id, a);
       },
       onPreviewError: (id) => {
         previewRef.current?.onError(id);
       },
-      onConcesion: (c) => {
+      onConcession: (c) => {
         if (sinkRef.current && sinkRef.current.handle !== c.handle) return;
         concessionRef.current = c;
-        if (alive) setConcesion(c);
+        if (alive) setConcession(c);
       },
       onPlan: (p) => {
-        if (sinkRef.current?.handle !== p.handle) return;
-        if (alive) setPlan(p);
-        if (p.event === 2) sinkRef.current?.applyPlanCanceladas(p.cancelled);
+        if (sinkRef.current?.handle === p.handle) {
+          if (alive) setPlan(p);
+          if (p.event === 2) sinkRef.current?.applyPlanCanceladas(p.cancelled);
+        } else if (p.event === 2) {
+          ledgersRef.current.canceladas(p.handle, p.cancelled);
+        }
       },
-      onRaspar: (r) => {
+      onScrape: (r) => {
+        if (sinkRef.current?.handle === r.handle) {
+          sinkRef.current.applyScrape(r, () => performance.now());
+          if (alive) setPaintTick((t) => t + 1);
+        } else {
+          const res = ledgersRef.current.applyScrape(r);
+          clientRef.current?.sendScraped(r.handle, r.order, r.epoch, r.through, res.scraped, res.kib, res.keep);
+        }
+      },
+      onRenew: (r) => {
         if (sinkRef.current?.handle !== r.handle) return;
-        sinkRef.current?.applyRaspar(r, () => performance.now());
-        if (alive) setPaintTick((t) => t + 1);
+        sinkRef.current?.applyRenew(r.ranges, r.order, r.leaseS, () => performance.now());
       },
-      onRenovar: (r) => {
-        if (sinkRef.current?.handle !== r.handle) return;
-        sinkRef.current?.applyRenovar(r.ranges, r.order, r.leaseS, () => performance.now());
-      },
-      onAuditar: (a) => {
-        if (sinkRef.current?.handle !== a.handle) return;
-        const inv = sinkRef.current?.inventory(a.through);
+      onAudit: (a) => {
+        const inv = sinkRef.current?.handle === a.handle
+          ? sinkRef.current?.inventory(a.through)
+          : ledgersRef.current.inventory(a.handle, a.through);
         if (inv && clientRef.current) {
           clientRef.current.sendInventory(a.handle, a.order, a.through, inv.brushCount, inv.kib, inv.ranges);
         }
       },
-      onProtoError: (e) => {
-        if (e.codigo === 12) {
+      onProtocolError: (e) => {
+        if (e.code === 12) {
+          clearResume();
           sinkRef.current?.dispose();
           sinkRef.current = null;
-          setAbierta(null);
-          setConcesion(null);
+          setWorkOpened(null);
+          setConcession(null);
           previewRef.current?.resume();
         }
         if (alive) setLastError(e);
       },
       onDelivery: (bytes) => {
+        try {
+          const h = parseBrushHead(bytes);
+          if (sinkRef.current?.handle !== h.handle) {
+            const split = splitBrushId(h.brushId);
+            let bandBytes = 0;
+            for (const n of h.lengths) bandBytes += n;
+            ledgersRef.current.record(h.handle, {
+              delivery: h.delivery,
+              brushId: h.brushId,
+              stratum: split.stratum,
+              from: h.from,
+              through: h.through,
+              bytes: bandBytes,
+              epoch: h.epoch,
+              edition: h.edition,
+              expires: 0,
+              rgba: null,
+            });
+          }
+        } catch {
+          /* unparseable frame: sink/preview paths reject it too */
+        }
         if (previewRef.current?.onDelivery(bytes)) return;
         sinkRef.current?.ingest(bytes, () => performance.now(), () => {
           if (alive) setPaintTick((t) => t + 1);
@@ -136,7 +176,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
     const concessionRef: { current: Concession | null } = { current: null };
     const client = new SessionClient(events);
     clientRef.current = client;
-    miradasRef.current = new GazeSender(() => clientRef.current?.activeTransport ?? null);
+    gazesRef.current = new GazeSender(() => clientRef.current?.activeTransport ?? null);
     client.boot().then(
       () => {
         if (alive) client.requestCatalog();
@@ -152,10 +192,11 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       }
     };
     const onHide = (): void => {
-      client.sendAdios();
+      client.sendGoodbye();
     };
     document.addEventListener('visibilitychange', onVis);
     window.addEventListener('pagehide', onHide);
+    window.addEventListener('beforeunload', onHide);
     const sweep = window.setInterval(() => {
       sinkRef.current?.sweepExpiry(() => performance.now());
     }, 1000);
@@ -163,8 +204,9 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       alive = false;
       document.removeEventListener('visibilitychange', onVis);
       window.removeEventListener('pagehide', onHide);
+      window.removeEventListener('beforeunload', onHide);
       window.clearInterval(sweep);
-      miradasRef.current?.dispose();
+      gazesRef.current?.dispose();
       previewRef.current?.dispose();
       previewRef.current = null;
       sinkRef.current?.dispose();
@@ -189,23 +231,24 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
   const closeWork = (): void => {
     if (sinkRef.current) {
       const h = sinkRef.current.handle;
+      ledgersRef.current.adopt(h, sinkRef.current.book);
       sinkRef.current.dispose();
       sinkRef.current = null;
       clientRef.current?.closeHandle(h);
     }
-    setAbierta(null);
-    setConcesion(null);
+    setWorkOpened(null);
+    setConcession(null);
     setPlan(null);
     previewRef.current?.resume();
   };
 
   const value = useMemo<SeuratState>(
     () => ({
-      status, works, bienvenida, opened, concession, plan, lastError, paintTick,
-      client: clientRef.current, sink: sinkRef.current, gazeService: miradasRef.current,
+      status, works, welcome, opened, concession, plan, lastError, paintTick,
+      client: clientRef.current, sink: sinkRef.current, gazeService: gazesRef.current,
       retryConnect, closeWork,
     }),
-    [status, works, bienvenida, opened, concession, plan, lastError, paintTick],
+    [status, works, welcome, opened, concession, plan, lastError, paintTick],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

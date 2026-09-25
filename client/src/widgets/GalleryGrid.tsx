@@ -56,7 +56,6 @@ interface Props {
   onOpen: (id: string) => void;
 }
 
-<<<<<<< HEAD
 export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): JSX.Element {
   const chips: Array<[Filter, string]> = [
     ['all', 'All'],
@@ -64,25 +63,12 @@ export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): J
     ['landscape', 'Landscape'],
     ['portrait', 'Portrait'],
   ];
-=======
-const CHIPS: Array<[Filter, string]> = [
-  ['all', 'All'],
-  ['landscape', 'Landscape'],
-  ['portrait', 'Portrait'],
-];
->>>>>>> f73fa7b395529297e44c096cb0cbfa538585f92a
 
   return (
     <>
-<<<<<<< HEAD
-      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {chips.map(([k, label]) => {
-=======
       <div className={styles.filterBar}>
         <div className={styles.chipGroup}>
-          {CHIPS.map(([k, label]) => {
->>>>>>> f73fa7b395529297e44c096cb0cbfa538585f92a
+          {chips.map(([k, label]) => {
             const on = filter === k;
             return (
               <button
@@ -97,7 +83,7 @@ const CHIPS: Array<[Filter, string]> = [
         </div>
         <span className={styles.counter}>{items.length} images</span>
       </div>
-      <div className={styles.masonry}>
+      <div className={styles.grid}>
         {items.map((w, i) => (
           <div
             key={w.id}

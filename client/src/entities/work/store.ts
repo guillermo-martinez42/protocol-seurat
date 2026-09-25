@@ -1,4 +1,4 @@
-import type { WorkMsg } from '@/shared/proto/messages';
+import type { WorkMessage } from '@/shared/proto/messages';
 import type { Orient, Work } from './types';
 
 export type Filter = 'all' | Orient | string;
@@ -14,7 +14,7 @@ export function tagOfWork(id: string, name?: string): string | undefined {
   return undefined;
 }
 
-export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work> {
+export function applyWork(prev: Map<string, Work>, m: WorkMessage): Map<string, Work> {
   const next = new Map(prev);
   if (m.event === 4) {
     next.delete(m.id);
@@ -26,20 +26,32 @@ export function applyWork(prev: Map<string, Work>, m: WorkMsg): Map<string, Work
     name: m.name,
     width: m.width,
     height: m.height,
-    estratos: m.estratos,
-    estado: m.estado as Work['estado'],
+    strata: m.strata,
+    state: m.state as Work['state'],
     edition: m.edition,
-    progreso: m.progreso,
+    progress: m.progress,
     tag,
   });
   return next;
 }
 
+export function compareWorksAsc(a: Work, b: Work): number {
+  const nameA = a.name && a.name.length > 0 ? a.name : a.id;
+  const nameB = b.name && b.name.length > 0 ? b.name : b.id;
+  const cmp = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+  return cmp !== 0 ? cmp : a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+export function sortWorks(list: Work[]): Work[] {
+  return [...list].sort(compareWorksAsc);
+}
+
 export function filterWorks(list: Work[], f: Filter): Work[] {
-  if (f === 'all') return list;
-  if (f === 'landscape') return list.filter((w) => w.width >= w.height);
-  if (f === 'portrait') return list.filter((w) => w.width < w.height);
-  return list.filter((w) => w.tag === f);
+  let res = list;
+  if (f === 'landscape') res = list.filter((w) => w.width >= w.height);
+  else if (f === 'portrait') res = list.filter((w) => w.width < w.height);
+  else if (f !== 'all') res = list.filter((w) => w.tag === f);
+  return sortWorks(res);
 }
 
 export function fixtureWorks(): Work[] {
@@ -62,9 +74,9 @@ export function fixtureWorks(): Work[] {
     name,
     width,
     height,
-    estratos: 11,
-    estado: 3 as const,
+    strata: 11,
+    state: 3 as const,
     edition: 2,
-    progreso: 100,
+    progress: 100,
   }));
 }

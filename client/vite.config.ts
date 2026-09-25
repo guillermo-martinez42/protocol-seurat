@@ -8,6 +8,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   plugins: [react()],
   base: './',
+  // Dev only: the Java server owns the Seurat endpoints (LAN, localhost).
+  server: {
+    proxy: {
+      '/seurat': { target: 'http://localhost:8080', changeOrigin: false, ws: true },
+    },
+  },
   build: { outDir: 'dist', emptyOutDir: true },
   resolve: { alias: { '@': resolve(here, 'src') } },
   worker: { format: 'es' },

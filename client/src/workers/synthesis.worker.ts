@@ -79,8 +79,8 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
   const t0 = performance.now();
   const req = ev.data;
   try {
-    const w = req.seed ? req.semillaAncho : 256;
-    const h = req.seed ? req.semillaAlto : 256;
+    const w = req.seed ? req.seedWidth : 256;
+    const h = req.seed ? req.seedHeight : 256;
     const px = w * h;
     const planes: Record<'Y' | 'Co' | 'Cg', Int16Array> = {
       Y: new Int16Array(px),

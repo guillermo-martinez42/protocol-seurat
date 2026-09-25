@@ -32,9 +32,13 @@
   color: var(--border-line);
 }
 
+.grid,
 .masonry {
-  columns: var(--gallery-columns-w, 300px);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--gallery-columns-w, 300px), 1fr));
   column-gap: 24px;
+  row-gap: 32px;
+  align-items: start;
 }
 
 .cardThumb {

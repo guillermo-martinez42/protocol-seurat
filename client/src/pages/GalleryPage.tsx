@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useLayoutEffect } from 'react';
 import { GalleryHero } from '@/widgets/GalleryHero';
 import { GalleryGrid } from '@/widgets/GalleryGrid';
 import { filterWorks } from '@/entities/work/store';
-import { goViewer } from '@/app/router';
+import { workTitle } from '@/entities/work/types';
+import { galleryScroll, goViewer } from '@/app/router';
 import { patchUi, useUi } from '@/app/store';
 import { useSeurat } from '@/app/providers/SeuratProvider';
 import styles from './GalleryPage.module.css';
@@ -31,6 +32,11 @@ export function GalleryPage(): JSX.Element {
     return [...s].sort();
   }, [works]);
 
+  useLayoutEffect(() => {
+    const y = galleryScroll();
+    if (y > 0) window.scrollTo(0, y);
+  }, []);
+
   return (
     <div className={styles.page}>
       <header className={styles.header}>
@@ -40,6 +46,7 @@ export function GalleryPage(): JSX.Element {
       <main className={styles.main}>
         <GalleryHero
           featuredWorkId={items[0]?.id}
+          featuredTitle={items[0] ? workTitle(items[0], 0) : 'Plate 01'}
           onOpen={() => {
             const first = items[0];
             if (first) goViewer(first.id);

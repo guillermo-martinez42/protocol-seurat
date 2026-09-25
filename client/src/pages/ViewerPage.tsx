@@ -36,50 +36,19 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
   const fitPct = view?.fitPct ?? 100;
   const inDots = view?.inDots ?? false;
 
+  const effectiveMaxZoom = Math.max(VIEWER_MAX_ZOOM, Math.ceil((fitPct / 100) * 4));
+
   const presets = useMemo(
-    () => buildPresets(pct, fitPct, VIEWER_MAX_ZOOM, POINTILLIST_ZOOM_THRESHOLD_PCT / 100),
-    [pct, fitPct],
+    () => buildPresets(pct, fitPct, effectiveMaxZoom, POINTILLIST_ZOOM_THRESHOLD_PCT / 100),
+    [pct, fitPct, effectiveMaxZoom],
   );
+  const workTag = seurat.works[idx]?.tag;
   const rows = useMemo(
-    () => buildViewerInfoRows(dims, mp, iw, ih, fitPct, seurat.status),
-    [dims, mp, iw, ih, fitPct, seurat.status],
+    () => buildViewerInfoRows(dims, mp, iw, ih, fitPct, seurat.status, workTag),
+    [dims, mp, iw, ih, fitPct, seurat.status, workTag],
   );
 
-<<<<<<< HEAD
-  const rows = useMemo(() => {
-    const orient = iw >= ih ? '3 : 2' : '2 : 3';
-    return [
-      { k: 'Dimensions', v: dims + ' px' },
-      { k: 'Resolution', v: mp },
-      ...(work?.tag ? [{ k: 'Tag', v: work.tag }] : []),
-      { k: 'Aspect ratio', v: orient },
-      { k: 'Fit zoom', v: fmtPct(fitPct) },
-      { k: 'Max zoom', v: (MAX_ZOOM * 100).toLocaleString('en-US') + '%' },
-      { k: 'Dots from', v: DOT_THRESHOLD.toLocaleString('en-US') + '%' },
-      { k: 'Source', v: seurat.status },
-    ];
-  }, [dims, mp, iw, ih, fitPct, seurat.status, work?.tag]);
-
-  const go = (d: number): void => {
-    const next = seurat.works[stepIndex(idx, d, n)];
-    if (next) goViewer(next.id);
-  };
-
-  const back = (): void => {
-    if (ui.menu) {
-      patchUi({ menu: false });
-      return;
-    }
-    if (ui.info) {
-      patchUi({ info: false });
-      return;
-    }
-    goGallery();
-  };
-
-=======
   const handleBack = (): void => back(ui.menu, ui.info);
->>>>>>> f73fa7b395529297e44c096cb0cbfa538585f92a
   const handleToggleDots = (): void => {
     if ((view?.s ?? 1) < POINTILLIST_ZOOM_THRESHOLD_PCT / 100) {
       patchUi({ dots: true });
@@ -103,7 +72,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         loupe={ui.loupe}
         dots={ui.dots}
         dotThreshold={POINTILLIST_ZOOM_THRESHOLD_PCT}
-        maxZoom={VIEWER_MAX_ZOOM}
+        maxZoom={effectiveMaxZoom}
         apiRef={api}
         actions={{
           onToggleLoupe: () => patchUi({ loupe: !ui.loupe }),

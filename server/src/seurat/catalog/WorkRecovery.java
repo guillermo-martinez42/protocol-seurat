@@ -1,0 +1,58 @@
+package seurat.catalog;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import seurat.ingest.IngestJob;
+import seurat.proto.ProtoCodes;
+import seurat.store.FileBrushStore;
+
+/** Restart recovery: read meta.json per work and rebuild LISTA stores. */
+final class WorkRecovery {
+    private WorkRecovery() {
+    }
+
+    /** id -> work map rebuilt from disk; broken entries are skipped. */
+    static Map<String, WorkRecord> readAll(Path worksDir) throws IOException {
+        Map<String, WorkRecord> found = new HashMap<>();
+        if (!Files.exists(worksDir)) return found;
+        try (var walk = Files.walk(worksDir)) {
+            for (Path meta : walk.filter(p -> p.getFileName().toString().equals("meta.json")).toList()) {
+                Path dir = meta.getParent();
+                if (dir.getFileName().toString().equals("ed1")) continue;
+                String defaultId = worksDir.relativize(dir).toString().replace('\\', '/');
+                var info = MetaJson.read(defaultId, Files.readString(meta));
+                WorkRecord work = new WorkRecord(info);
+                if (info.strata() > 0 && readyState(info.state())) {
+                    attachStore(dir, info, work);
+                }
+                found.put(info.id(), work);
+            }
+        }
+        return found;
+    }
+
+    private static void attachStore(Path dir, seurat.store.WorkMeta info, WorkRecord work)
+            throws IOException {
+        int top = info.strata() - 1;
+        int[] nx = new int[top];
+        int[] ny = new int[top];
+        for (int stratum = 0; stratum < top; stratum++) {
+            nx[stratum] = IngestJob.div256(IngestJob.padTo(info.width(), top) >> stratum);
+            ny[stratum] = IngestJob.div256(IngestJob.padTo(info.height(), top) >> stratum);
+        }
+        Path storeDir = info.edition() == 1 && Files.exists(dir.resolve("ed1"))
+                ? dir.resolve("ed1")
+                : dir;
+        Path seed = storeDir.resolve("semilla.bin");
+        if (Files.isRegularFile(seed) && Files.size(seed) > 4) {
+            work.store = new FileBrushStore(storeDir, info, nx, ny);
+        }
+    }
+
+    private static boolean readyState(int state) {
+        return state == ProtoCodes.ST_BOCETO || state == ProtoCodes.ST_LISTA;
+    }
+}
