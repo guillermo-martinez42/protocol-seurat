@@ -10,7 +10,7 @@ import seurat.store.WorkMeta;
 /** Budget: first serve charges, redelivery free, caps stop sweeps. */
 public final class BrushBudgetTest {
     static WorkMeta meta() {
-        return new WorkMeta("w", "w", 512, 512, 256, 2, 3, 2, 0, 2);
+        return new WorkMeta("w", "w", 1024, 1024, 256, 11, 3, 2, 0, 2);
     }
 
     public static void main(String[] args) throws Exception {

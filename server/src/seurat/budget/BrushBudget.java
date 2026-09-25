@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import seurat.codec.BrushId;
+import seurat.concession.Concessions;
 import seurat.store.WorkMeta;
 
 /**
@@ -25,7 +26,7 @@ public final class BrushBudget {
     public boolean consume(String principal, String work, BrushId p, int from,
             int through, String role, WorkMeta meta) {
         int stratum = p.stratum();
-        if (stratum > 1) {
+        if (stratum > 1 || stratum >= Concessions.sketchMin(meta.strata() - 1)) {
             return true;
         }
         try {
