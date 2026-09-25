@@ -73,6 +73,7 @@ export interface ChromeActions {
   onToggleLoupe(): void;
   onToggleDots(): void;
   onToggleInfo(): void;
+  onToggleTelemetry(): void;
   onPrev(): void;
   onNext(): void;
   onBack(): void;
@@ -544,6 +545,7 @@ export function ViewerChrome(props: Props): JSX.Element {
       } else if (k === 'l' || k === 'L') a.onToggleLoupe();
       else if (k === 'p' || k === 'P') a.onToggleDots();
       else if (k === 'i' || k === 'I') a.onToggleInfo();
+      else if (k === 't' || k === 'T') a.onToggleTelemetry();
       else if (k === '[') a.onPrev();
       else if (k === ']') a.onNext();
       else if (k === 'Escape') a.onBack();

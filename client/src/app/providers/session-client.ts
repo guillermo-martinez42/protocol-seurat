@@ -39,6 +39,7 @@ import { concat, u64Decode, viEncode } from '@/shared/proto/varint';
 import { encodeFrame, FatalProtocolError } from '@/shared/proto/frame';
 import { splitFrame } from '@/shared/proto/frame';
 import { declareMemMib, loadResume, persistResume } from '@/entities/session/store';
+import { RateMeter } from '@/shared/lib/rate-meter';
 
 export interface SessionEvents {
   onWelcome(b: Welcome): void;
@@ -68,6 +69,8 @@ export class SessionClient {
   private memMib = declareMemMib();
   private disposed = false;
   private pendingOpens: Array<{ id: string; preview: boolean }> = [];
+  /** Every byte the server sends on this session: the link rate RECIBO.libre is sized from. */
+  readonly meter = new RateMeter();
 
   constructor(private events: SessionEvents) {}
 
@@ -114,8 +117,14 @@ export class SessionClient {
 
   wire(t: SeuratTransport): void {
     this.transport = t;
-    t.onControl = (frame) => this.routeControl(frame);
-    t.onDelivery = (bytes) => this.events.onDelivery(bytes);
+    t.onControl = (frame) => {
+      this.meter.record(frame.length, performance.now());
+      this.routeControl(frame);
+    };
+    t.onDelivery = (bytes) => {
+      this.meter.record(bytes.length, performance.now());
+      this.events.onDelivery(bytes);
+    };
     t.onClose = (reason) => this.events.onStatus('closed ' + reason);
   }
 

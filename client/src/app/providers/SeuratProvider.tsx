@@ -10,6 +10,7 @@ import type { Work } from '@/entities/work/types';
 import type { WorkOpened, Welcome, Concession, PlanMsg, ProtocolError } from '@/shared/proto/messages';
 import { GazeSender } from '@/features/send-gaze';
 import { PreviewManager } from '@/features/preview-works';
+import { ImageTelemetry } from '@/entities/telemetry/image-telemetry';
 
 export interface SeuratState {
   status: string;
@@ -22,6 +23,7 @@ export interface SeuratState {
   paintTick: number;
   client: SessionClient | null;
   sink: DeliverySink | null;
+  telemetry: ImageTelemetry | null;
   gazeService: GazeSender | null;
   retryConnect(): void;
   closeWork(): void;
@@ -46,6 +48,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [paintTick, setPaintTick] = useState(0);
   const clientRef = useRef<SessionClient | null>(null);
   const sinkRef = useRef<DeliverySink | null>(null);
+  const telemetryRef = useRef<ImageTelemetry | null>(null);
   const ledgersRef = useRef(new HandleLedgers(MAX_RETIRED_HANDLES));
   const gazesRef = useRef<GazeSender | null>(null);
   const worksRef = useRef(new Map<string, Work>());
@@ -89,6 +92,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
           a.seedHeight,
         );
         sinkRef.current = sink;
+        telemetryRef.current = new ImageTelemetry(a.handle, performance.now());
       },
       onPreviewWorkOpened: (id, a) => {
         previewRef.current?.onWorkOpened(id, a);
@@ -102,6 +106,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
         if (alive) setConcession(c);
       },
       onPlan: (p) => {
+        if (telemetryRef.current?.handle === p.handle) telemetryRef.current.onPlan(p, performance.now());
         if (sinkRef.current?.handle === p.handle) {
           if (alive) setPlan(p);
           if (p.event === 2) sinkRef.current?.applyPlanCanceladas(p.cancelled);
@@ -135,6 +140,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
           clearResume();
           sinkRef.current?.dispose();
           sinkRef.current = null;
+          telemetryRef.current = null;
           setWorkOpened(null);
           setConcession(null);
           previewRef.current?.resume();
@@ -144,6 +150,9 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       onDelivery: (bytes) => {
         try {
           const h = parseBrushHead(bytes);
+          if (telemetryRef.current?.handle === h.handle) {
+            telemetryRef.current.onDelivery(bytes.length, h.delivery, performance.now());
+          }
           if (sinkRef.current?.handle !== h.handle) {
             const split = splitBrushId(h.brushId);
             let bandBytes = 0;
@@ -236,6 +245,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       sinkRef.current = null;
       clientRef.current?.closeHandle(h);
     }
+    telemetryRef.current = null;
     setWorkOpened(null);
     setConcession(null);
     setPlan(null);
@@ -245,7 +255,8 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
   const value = useMemo<SeuratState>(
     () => ({
       status, works, welcome, opened, concession, plan, lastError, paintTick,
-      client: clientRef.current, sink: sinkRef.current, gazeService: gazesRef.current,
+      client: clientRef.current, sink: sinkRef.current, telemetry: telemetryRef.current,
+      gazeService: gazesRef.current,
       retryConnect, closeWork,
     }),
     [status, works, welcome, opened, concession, plan, lastError, paintTick],

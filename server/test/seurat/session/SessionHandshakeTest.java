@@ -19,7 +19,32 @@ public final class SessionHandshakeTest {
         testNormalHello();
         testResumeSuccess();
         testResumeRejection();
+        testResumeAdoptsOnlyClaims();
         System.out.println("SessionHandshakeTest OK");
+    }
+
+    /** A reloaded page resumes with no claims: nothing is adopted, so no later audit can fail. */
+    private static void testResumeAdoptsOnlyClaims() throws Exception {
+        Sessions sessions = new Sessions();
+        byte[] oldTicket = sessions.newTicket();
+        Session oldSession = new Session(300, "alice", "autenticado", 256, ProtoCodes.CAP_REANUDAR,
+                new RecordingMapping(), oldTicket);
+        Canvas canvas = new Canvas(1, "w", null, new WorkMeta("w", "w", 512, 512, 256, 2, 3, 2, 0, 2),
+                new Concession(1, 0, 4, 1, 768, 36864, 120));
+        canvas.book().log(new BrushId(1, 0, 0), 0, 2, 100, 1);
+        canvas.session(oldSession);
+        oldSession.canvases().put(1L, canvas);
+        sessions.add(oldSession);
+        sessions.retire(oldSession, 120_000_000_000L);
+        byte[] newToken = Hex.unhex(sessions.issueToken("alice", "autenticado", 256, 60000));
+        RecordingMapping mapping = new RecordingMapping();
+        var queue = new LinkedBlockingQueue<byte[]>();
+        var resumeReq = new MsgHandshake.ResumeRequest(300, oldTicket, List.of());
+        queue.add(new Frame(FrameType.SALUDO, new MsgHandshake.Hello(1, 1, ProtoCodes.CAP_REANUDAR,
+                256, newToken, resumeReq).encode()).encode());
+        Session s = new SessionHandshake(mapping, queue, sessions, 768).hello();
+        TestKit.check(s.canvases().isEmpty(), "unclaimed canvas not adopted");
+        TestKit.check(mapping.control.size() == 1, "BIENVENIDA only, no CONCESION");
     }
 
     private static void testNormalHello() throws Exception {

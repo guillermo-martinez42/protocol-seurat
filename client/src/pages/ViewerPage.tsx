@@ -3,6 +3,8 @@ import { ViewerChrome, type ChromeApi, type ViewSync } from '@/widgets/ViewerChr
 import { ViewerToolbar } from '@/widgets/ViewerToolbar';
 import { ViewerMinimap } from '@/widgets/ViewerMinimap';
 import { ViewerInfoPanel } from '@/widgets/ViewerInfoPanel';
+import { TelemetryPanel } from '@/widgets/TelemetryPanel';
+import type { TelemetryInput } from '@/entities/telemetry/sections';
 import { ViewerTopBar } from '@/widgets/ViewerTopBar';
 import { StatusPill } from '@/widgets/StatusPill';
 import { LoadError } from '@/widgets/LoadError';
@@ -49,6 +51,15 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
   );
 
   const handleBack = (): void => back(ui.menu, ui.info);
+  const toggleTelemetry = (): void => patchUi({ telemetry: !ui.telemetry });
+  const readTelemetry = (): TelemetryInput => ({
+    now: performance.now(),
+    transport: seurat.client?.activeTransport?.name ?? null,
+    link: seurat.client?.meter ?? null,
+    image: seurat.telemetry,
+    sink: seurat.sink,
+    concession: seurat.concession,
+  });
   const handleToggleDots = (): void => {
     if ((view?.s ?? 1) < POINTILLIST_ZOOM_THRESHOLD_PCT / 100) {
       patchUi({ dots: true });
@@ -78,6 +89,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
           onToggleLoupe: () => patchUi({ loupe: !ui.loupe }),
           onToggleDots: handleToggleDots,
           onToggleInfo: () => patchUi({ info: !ui.info }),
+          onToggleTelemetry: toggleTelemetry,
           onPrev: () => go(-1),
           onNext: () => go(1),
           onBack: handleBack,
@@ -94,10 +106,12 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
         mp={mp}
         counter={counterLabel(idx, n)}
         infoActive={ui.info}
+        telemetryActive={ui.telemetry}
         onBack={handleBack}
         onPrev={() => go(-1)}
         onNext={() => go(1)}
         onToggleInfo={() => patchUi({ info: !ui.info })}
+        onToggleTelemetry={toggleTelemetry}
       />
       {inDots && (
         <div className={styles.pointillistBanner}>
@@ -135,6 +149,7 @@ export function ViewerPage({ id }: { id: string }): JSX.Element {
       />
       <ViewerMinimap api={api} view={view} iw={iw} ih={ih} ready={ready} sink={seurat.sink} paintTick={seurat.paintTick} />
       {ui.info && <ViewerInfoPanel rows={rows} onClose={() => patchUi({ info: false })} />}
+      {ui.telemetry && <TelemetryPanel read={readTelemetry} onClose={() => patchUi({ telemetry: false })} />}
     </div>
   );
 }

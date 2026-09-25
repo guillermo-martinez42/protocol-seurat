@@ -1,4 +1,5 @@
 import { RECEIPT_EVERY_N, RECEIPT_EVERY_MS, RELEASE_BATCH_MS } from '@/shared/config/constants';
+import { receiverWindow } from '@/entities/delivery/credit';
 import { parseBrushHead, splitBrushId, sliceBands, verifyBand } from '@/shared/proto/brush';
 import type { Scrape } from '@/shared/proto/messages';
 import { matchesScrape as scrapeMatches } from '@/entities/delivery/scrape';
@@ -25,6 +26,8 @@ export class DeliverySink {
   private scrapes: PendingScrape[] = [];
   private cancelled = new Set<number>();
   private settledBelow: number | null = null;
+  private avgDelivery = 0;
+  private linkBps = 0;
 
   constructor(
     public readonly handle: number,
@@ -101,6 +104,7 @@ export class DeliverySink {
       }
     }
     const total = bands.reduce((n, b) => n + b.length, 0);
+    this.avgDelivery = this.avgDelivery === 0 ? bytes.length : 0.8 * this.avgDelivery + 0.2 * bytes.length;
     const split = splitBrushId(h.brushId);
     const rec: DeliveryRecord = {
       delivery: h.delivery,
@@ -225,8 +229,25 @@ export class DeliverySink {
     this.release(nums, 1);
   }
 
+  /**
+   * RECIBO.libre: the memory window, capped to ~CREDIT_WINDOW_S of deliveries at the link's
+   * recent rate, so a slow link never queues more than that ahead of a new MIRADA.
+   */
   free(): number {
-    return Math.max(0, this.maxBrushes() - this.book.byDelivery.size);
+    const memory = Math.max(0, this.maxBrushes() - this.book.byDelivery.size);
+    const peak = this.client()?.meter?.peak(performance.now()) ?? 0;
+    // Only a second that carried at least one brush measures the link; idle keeps the last rate,
+    // so the next view starts with a full window instead of re-ramping from CREDIT_MIN.
+    if (this.avgDelivery > 0 && peak >= this.avgDelivery) this.linkBps = peak;
+    return receiverWindow(memory, this.linkBps, this.avgDelivery);
+  }
+
+  get queueDepthMs(): number {
+    return this.queueMs;
+  }
+
+  get avgDeliveryBytes(): number {
+    return this.avgDelivery;
   }
 
   private release(ranges: number[], reason: number): void {
@@ -247,7 +268,8 @@ export class DeliverySink {
   }
 
   private maybeFlushReceipt(): void {
-    if (this.book.pendingReceipt.length >= RECEIPT_EVERY_N) {
+    // A small window (slow link) is refilled per brush so the link never drains; big ones batch.
+    if (this.book.pendingReceipt.length >= RECEIPT_EVERY_N || this.free() <= RECEIPT_EVERY_N) {
       this.flushReceipt();
       return;
     }

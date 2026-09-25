@@ -23,11 +23,9 @@ public final class BandsOrder {
         boolean is16k = (n == N_16K);
         int side = is16k ? 128 : (int) Math.sqrt(n);
         for (int i = 0; i < n; i++) {
-            long unsigned = ((long) energy[i]) - (long) Integer.MIN_VALUE;
-            long high = 0xFFFFFFFFL - unsigned;
             int morton = is16k ? MORTON_16K[i] : (int) Morton.encode(i % side, i / side);
-            long mid = (long) (morton & 0xFFFF);
-            packed[i] = (high << 32) | (mid << 16) | (long) (i & 0xFFFF);
+            // ~E is descending for every int; an offset key sets bit 63 for E < 0 and sorts it first.
+            packed[i] = ((long) ~energy[i] << 32) | ((long) (morton & 0xFFFF) << 16) | (i & 0xFFFF);
         }
         Arrays.sort(packed);
         int[] rank = new int[n];

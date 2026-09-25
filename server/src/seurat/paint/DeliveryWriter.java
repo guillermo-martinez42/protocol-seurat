@@ -23,11 +23,14 @@ final class DeliveryWriter {
     private final Metrics metrics;
     private final Semaphore globalSlots;
     private final InFlightDeliveries inFlight;
+    private final Runnable slotFreed;
 
-    DeliveryWriter(Metrics metrics, Semaphore globalSlots, InFlightDeliveries inFlight) {
+    DeliveryWriter(Metrics metrics, Semaphore globalSlots, InFlightDeliveries inFlight,
+            Runnable slotFreed) {
         this.metrics = metrics;
         this.globalSlots = globalSlots;
         this.inFlight = inFlight;
+        this.slotFreed = slotFreed;
     }
 
     void write(Canvas canvas, Delivery delivery) {
@@ -95,6 +98,7 @@ final class DeliveryWriter {
             inFlight.remove(canvas, delivery);
             session.releaseSlot();
             globalSlots.release();
+            slotFreed.run();
         }
     }
 

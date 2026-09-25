@@ -9,6 +9,8 @@ public final class SeuratConstants {
     public static final long SKEW_MS = 1000;
     public static final long HEARTBEAT_S = 15;
     public static final int MAX_IN_FLIGHT = 12;
+    /** Receiver window (unconfirmed deliveries) a canvas gets before its first RECIBO.libre. */
+    public static final int INITIAL_CREDIT = 8;
     public static final int GLOBAL_SLOTS = 512;
     public static final long CODEL_TARGET_NS = 25_000_000L;
     public static final long CODEL_TICK_MS = 250;

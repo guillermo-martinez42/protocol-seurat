@@ -28,22 +28,35 @@ public final class Painter implements Runnable {
     private final DeliveryWriter writer;
     private final BudgetApplier applier;
     private final InFlightDeliveries inFlight = new InFlightDeliveries();
+    private final ParkedEntries parked = new ParkedEntries();
 
     public Painter(Regulator regulator, BrushBudget budget, Metrics metrics) {
         this.regulator = regulator;
-        this.writer = new DeliveryWriter(metrics, globalSlots, inFlight);
+        this.writer = new DeliveryWriter(metrics, globalSlots, inFlight,
+                () -> queue.addAll(parked.takeAll()));
         this.applier = new BudgetApplier(budget);
     }
 
     /** Replaces the pending plan of a canvas (unopened entries discarded). */
     public void enqueue(Canvas canvas, List<PlanEntry> entries) {
-        queue.removeIf(p -> p.canvas() == canvas);
+        drop(canvas);
         long now = System.nanoTime();
         for (PlanEntry entry : entries) {
             queue.add(new Pending(canvas, entry, now, canvas.session().stride));
         }
         Log.debug("paint", "Enqueued " + entries.size() + " plan entries for canvas "
                 + canvas.handle() + " (session " + canvas.session().id() + ")");
+    }
+
+    /** CERRAR or session end: its unopened entries must not keep using the link. */
+    public void drop(Canvas canvas) {
+        queue.removeIf(p -> p.canvas() == canvas);
+        parked.take(canvas);
+    }
+
+    /** RECIBO or SOLTAR freed receiver credit: retry what the canvas parked. */
+    public void unpark(Canvas canvas) {
+        queue.addAll(parked.take(canvas));
     }
 
     /** Budget finalize before PLAN START (see BudgetApplier). */
@@ -56,9 +69,11 @@ public final class Painter implements Runnable {
      * cancels violating in-flight deliveries. Returns the cancelled ranges.
      */
     public Ranges purge(Canvas canvas, Concession next) {
-        queue.removeIf(p -> p.canvas() == canvas
+        java.util.function.Predicate<Pending> forbidden = p -> p.canvas() == canvas
                 && (!next.allows(p.entry().brush(), p.entry().through())
-                        || p.edition() != canvas.meta().edition()));
+                        || p.edition() != canvas.meta().edition());
+        queue.removeIf(forbidden);
+        parked.removeIf(canvas, forbidden);
         Ranges cancelled = inFlight.purge(canvas, next);
         if (!cancelled.isEmpty()) {
             Log.debug("paint", "Purged entries for canvas " + canvas.handle()
@@ -93,18 +108,16 @@ public final class Painter implements Runnable {
                             canvas.meta().strata() - 1)) < through)) {
                 return;
             }
-            if (book.size() >= concession.maxBrushes()
-                    || canvas.session().inFlight() >= canvas.session().free) {
-                queue.add(pending);
-                return;
-            }
-            if (!canvas.session().takeSlot()) {
-                queue.add(pending);
+            // Receiver window (RECIBO.libre) caps unconfirmed deliveries: on a slow link the
+            // backlog ahead of a new MIRADA or a control frame stays near one window.
+            if (book.size() >= concession.maxBrushes() || book.unsettled() >= canvas.free
+                    || !canvas.session().takeSlot()) {
+                parked.park(pending);
                 return;
             }
             if (!globalSlots.tryAcquire()) {
                 canvas.session().releaseSlot();
-                queue.add(pending);
+                parked.park(pending);
                 return;
             }
             regulator.onStart(canvas.session(), System.nanoTime() - pending.queuedNs());

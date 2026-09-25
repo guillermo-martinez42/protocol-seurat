@@ -65,6 +65,8 @@ public final class Canvas {
     public long renewNs;
     public long auditNs;
     public long auditBase;
+    /** Receiver window from this handle's last RECIBO.libre: max unconfirmed deliveries. */
+    public volatile long free = seurat.config.SeuratConstants.INITIAL_CREDIT;
 
     public WorkMeta meta() {
         return meta;

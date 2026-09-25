@@ -7,10 +7,12 @@ export interface ViewerTopBarProps {
   mp: string;
   counter: string;
   infoActive: boolean;
+  telemetryActive: boolean;
   onBack: () => void;
   onPrev: () => void;
   onNext: () => void;
   onToggleInfo: () => void;
+  onToggleTelemetry: () => void;
 }
 
 export function ViewerTopBar({
@@ -19,10 +21,12 @@ export function ViewerTopBar({
   mp,
   counter,
   infoActive,
+  telemetryActive,
   onBack,
   onPrev,
   onNext,
   onToggleInfo,
+  onToggleTelemetry,
 }: ViewerTopBarProps): JSX.Element {
   return (
     <div className={styles.topBar}>
@@ -56,6 +60,13 @@ export function ViewerTopBar({
           <Icon name="chevron_right" size={24} />
         </button>
         <div className={styles.divider} />
+        <button
+          onClick={onToggleTelemetry}
+          title="Telemetry (T)"
+          className={`visor-btn-spring ${styles.infoBtn} ${telemetryActive ? styles.infoBtnActive : ''}`}
+        >
+          <Icon name="bar_chart" size={24} />
+        </button>
         <button
           onClick={onToggleInfo}
           title="Details (I)"

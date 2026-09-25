@@ -8,6 +8,10 @@ export const GAZE_BURST = 40;
 export const GAZE_QUIET_IDLE_MS = 300;
 export const RECEIPT_EVERY_MS = 100;
 export const RECEIPT_EVERY_N = 8;
+/** RECIBO.libre keeps about this much link time of unconfirmed deliveries in flight. */
+export const CREDIT_WINDOW_S = 1;
+/** Never advertise fewer: one delivery arriving while the next is confirmed keeps the link busy. */
+export const CREDIT_MIN = 2;
 export const RELEASE_BATCH_MS = 100;
 export const SCRAPE_TIMEOUT_MS = 10_000;
 export const LEASE_S = 120;

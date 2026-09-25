@@ -72,6 +72,11 @@ public final class LoanBook {
         return last;
     }
 
+    /** Deliveries RECIBO has not confirmed yet (in flight or unsynthesized): receiver-window load. */
+    public synchronized int unsettled() {
+        return (int) deliveries.keySet().stream().filter(n -> !settled.contains(n)).count();
+    }
+
     public synchronized void release(Ranges r) {
         r.forEach(this::remove);
     }

@@ -24,7 +24,49 @@ public final class PainterTest {
         happyPath();
         dropsViolations();
         purgeCancels();
+        receiverWindowPaces();
+        dropStopsCanvas();
         System.out.println("PainterTest OK");
+    }
+
+    /** RECIBO.libre caps unconfirmed deliveries; a settle + unpark (RECIBO) releases the next. */
+    private static void receiverWindowPaces() throws Exception {
+        Rig rig = rig();
+        rig.canvas.book().log(new BrushId(10, 0, 0), 0, 1, 10, 1);
+        rig.canvas.book().settle(seurat.proto.Ranges.of(1));
+        rig.canvas.free = 1;
+        Thread thread = Thread.ofPlatform().daemon().start(rig.painter);
+        rig.canvas.startPlan(2, 2);
+        rig.painter.enqueue(rig.canvas, List.of(
+                new PlanEntry(new BrushId(1, 0, 0), 0, 2, 1),
+                new PlanEntry(new BrushId(1, 1, 0), 0, 2, 1)));
+        Thread.sleep(500);
+        TestKit.check(rig.mapping.deliveries.size() == 1, "window 1: second entry parked, got "
+                + rig.mapping.deliveries.size());
+        rig.canvas.book().settle(seurat.proto.Ranges.of(2, 3));
+        rig.painter.unpark(rig.canvas);
+        long deadline = System.currentTimeMillis() + 5000;
+        while (rig.mapping.deliveries.size() < 2 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(20);
+        }
+        TestKit.check(rig.mapping.deliveries.size() == 2, "credit releases the parked entry");
+        thread.interrupt();
+    }
+
+    /** CERRAR drops a canvas's unopened entries: they never use the link afterwards. */
+    private static void dropStopsCanvas() throws Exception {
+        Rig rig = rig();
+        rig.canvas.book().log(new BrushId(10, 0, 0), 0, 1, 10, 1);
+        rig.canvas.free = 0;
+        Thread thread = Thread.ofPlatform().daemon().start(rig.painter);
+        rig.painter.enqueue(rig.canvas, List.of(new PlanEntry(new BrushId(1, 0, 0), 0, 2, 1)));
+        Thread.sleep(300);
+        rig.painter.drop(rig.canvas);
+        rig.canvas.free = 10;
+        rig.painter.unpark(rig.canvas);
+        Thread.sleep(300);
+        TestKit.check(rig.mapping.deliveries.isEmpty(), "dropped entries never sent");
+        thread.interrupt();
     }
 
     static class Rig {

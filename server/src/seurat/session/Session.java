@@ -27,7 +27,6 @@ public final class Session {
     public volatile long stride;
     public volatile long lastActivityNs = System.nanoTime();
     public volatile long lastGazeNs;
-    public volatile long free = 768;
     public volatile long queueMs;
     public volatile long heartbeatNs;
     private final java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();

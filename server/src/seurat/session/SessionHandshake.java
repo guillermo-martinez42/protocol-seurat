@@ -97,13 +97,17 @@ final class SessionHandshake {
                     ProtoCodes.ERR_REANUDACION, 0, FrameType.SALUDO, "REANUDAR").encode());
             return List.of();
         }
+        // Adopt only what the client says it still holds (spec 8): a reloaded page claims
+        // nothing, and adopting full books would fail the next INVENTARIO audit.
         List<Long> resumed = new ArrayList<>();
-        for (var entry : grave.session().canvases().entrySet()) {
-            entry.getValue().session(session);
-            session.canvases().put(entry.getKey(), entry.getValue());
-            session.claimHandle(entry.getKey());
-            resumed.add(entry.getKey());
+        for (var claim : request.claims()) {
+            Canvas canvas = grave.session().canvases().get(claim.handle());
+            canvas.book().retainOnly(Long.MAX_VALUE, claim.ranges());
+            canvas.session(session);
+            session.canvases().put(claim.handle(), canvas);
+            resumed.add(claim.handle());
         }
+        grave.session().canvases().keySet().forEach(session::claimHandle);
         Log.info("session", "Session " + session.id() + " resumed " + resumed.size() + " canvas(es)");
         session.ticket(sessions.newTicket());
         return resumed;

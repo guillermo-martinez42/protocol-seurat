@@ -78,6 +78,7 @@ public final class Easel implements Runnable {
         }
         if (session != null) {
             Log.info("session", "Session " + session.id() + " closed/retired");
+            session.canvases().values().forEach(control::drop);
             sessions.retire(session, (SeuratConstants.LEASE_S * 1000 + SeuratConstants.SKEW_MS) * 1_000_000L);
         }
     }

@@ -127,6 +127,8 @@ public final class GrantController {
 
     public void confirm(Canvas c, MsgLoans.Scraped s) { LoanVerifier.confirm(c, s); }
     public void audit(Canvas c, MsgAudit.Inventory i) { LoanVerifier.audit(c, i); }
+    public void credit(Canvas c) { painter.unpark(c); }
+    public void drop(Canvas c) { painter.drop(c); }
 
     /** Full revoke + retire: scrape, then ERROR 4 and drop the canvas. */
     public void withdraw(Canvas canvas) {

@@ -69,11 +69,12 @@ final class CanvasService {
             if (receipt.renewThrough() > 0) {
                 canvas.acknowledgeRenewal(receipt.renewThrough(), now, leaseNs, skewNs);
             }
-            session.free = Math.max(1, receipt.free());
+            canvas.free = Math.max(1, receipt.free());
             session.queueMs = receipt.queueMs();
             Log.debug("loan", "Session " + session.id() + " h=" + receipt.handle()
-                    + " receipt: ack=" + receipt.completed() + " free=" + session.free);
+                    + " receipt: ack=" + receipt.completed() + " free=" + canvas.free);
         }
+        control.credit(canvas);
     }
 
     void release(Session session, Frame f) {
@@ -85,6 +86,7 @@ final class CanvasService {
                 Log.debug("loan", "Session " + session.id() + " h=" + release.handle()
                         + " released brushes: " + release.ranges());
             }
+            control.credit(canvas);
         }
     }
 
@@ -115,7 +117,10 @@ final class CanvasService {
     void closeCanvas(Session session, Frame f) {
         ByteBuffer b = ByteBuffer.wrap(f.payload());
         long handle = VarInt.get(b);
-        session.canvases().remove(handle);
+        Canvas closed = session.canvases().remove(handle);
+        if (closed != null) {
+            control.drop(closed);
+        }
         Log.info("session", "Session " + session.id() + " closed canvas handle=" + handle);
     }
 

@@ -28,6 +28,7 @@ const SVG_ICONS: Record<string, JSX.Element> = {
   chevron_right: <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />,
   check: <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />,
   info: <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />,
+  bar_chart: <path d="M5 9.2h3V19H5V9.2zM10.6 5h2.8v14h-2.8V5zm5.6 8H19v6h-2.8v-6z" />,
   remove: <path d="M19 13H5v-2h14v2z" />,
   add: <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />,
   arrow_drop_down: <path d="M7 10l5 5 5-5z" />,

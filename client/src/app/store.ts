@@ -32,6 +32,7 @@ export interface UiState {
   loupe: boolean;
   dots: boolean;
   info: boolean;
+  telemetry: boolean;
   menu: boolean;
 }
 
@@ -41,6 +42,7 @@ const store = createStore<UiState>({
   loupe: false,
   dots: true,
   info: false,
+  telemetry: false,
   menu: false,
 });
 
