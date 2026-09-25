@@ -143,4 +143,28 @@ describe('PreviewManager', () => {
 
     manager.dispose();
   });
+
+  it('orders pending queue according to the latest sorted ids list', () => {
+    const opened: string[] = [];
+    const mockClient = {
+      openPreview: (id: string) => {
+        opened.push(id);
+      },
+      closeHandle: () => {},
+    } as unknown as SessionClient;
+
+    const manager = new PreviewManager(() => mockClient);
+    // Initial enqueue opens first item ('work-3')
+    manager.enqueue(['work-3']);
+    expect(opened).toEqual(['work-3']);
+
+    // Now a batch arrives where natural sort places work-1 and work-2 ahead of work-3
+    manager.enqueue(['work-1', 'work-2', 'work-3']);
+    // Since work-3 is active, the queue has work-1 and work-2 sorted
+    // Once work-3 finishes/errors, work-1 is next
+    manager.onError('work-3');
+    expect(opened).toEqual(['work-3', 'work-1']);
+
+    manager.dispose();
+  });
 });

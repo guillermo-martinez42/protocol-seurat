@@ -57,7 +57,7 @@ export function useViewerWork(id: string, seurat: SeuratState) {
   };
 
   const go = (d: number): void => {
-    const next = seurat.works[stepIndex(idx, d, n)];
+    const next = list[stepIndex(idx, d, n)];
     if (next) goViewer(next.id);
   };
 

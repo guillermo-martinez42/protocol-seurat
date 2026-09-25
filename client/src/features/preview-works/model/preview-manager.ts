@@ -25,6 +25,8 @@ export class PreviewManager {
         this.queue.push(id);
       }
     }
+    const order = new Map(ids.map((id, i) => [id, i]));
+    this.queue.sort((a, b) => (order.get(a) ?? 9999) - (order.get(b) ?? 9999));
     this.pump();
   }
 

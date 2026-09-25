@@ -35,11 +35,23 @@ export function applyWork(prev: Map<string, Work>, m: WorkMessage): Map<string, 
   return next;
 }
 
+export function compareWorksAsc(a: Work, b: Work): number {
+  const nameA = a.name && a.name.length > 0 ? a.name : a.id;
+  const nameB = b.name && b.name.length > 0 ? b.name : b.id;
+  const cmp = nameA.localeCompare(nameB, undefined, { numeric: true, sensitivity: 'base' });
+  return cmp !== 0 ? cmp : a.id.localeCompare(b.id, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+export function sortWorks(list: Work[]): Work[] {
+  return [...list].sort(compareWorksAsc);
+}
+
 export function filterWorks(list: Work[], f: Filter): Work[] {
-  if (f === 'all') return list;
-  if (f === 'landscape') return list.filter((w) => w.width >= w.height);
-  if (f === 'portrait') return list.filter((w) => w.width < w.height);
-  return list.filter((w) => w.tag === f);
+  let res = list;
+  if (f === 'landscape') res = list.filter((w) => w.width >= w.height);
+  else if (f === 'portrait') res = list.filter((w) => w.width < w.height);
+  else if (f !== 'all') res = list.filter((w) => w.tag === f);
+  return sortWorks(res);
 }
 
 export function fixtureWorks(): Work[] {

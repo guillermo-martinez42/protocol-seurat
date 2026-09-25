@@ -2,6 +2,7 @@ import { useMemo, useLayoutEffect } from 'react';
 import { GalleryHero } from '@/widgets/GalleryHero';
 import { GalleryGrid } from '@/widgets/GalleryGrid';
 import { filterWorks } from '@/entities/work/store';
+import { workTitle } from '@/entities/work/types';
 import { galleryScroll, goViewer } from '@/app/router';
 import { patchUi, useUi } from '@/app/store';
 import { useSeurat } from '@/app/providers/SeuratProvider';
@@ -45,6 +46,7 @@ export function GalleryPage(): JSX.Element {
       <main className={styles.main}>
         <GalleryHero
           featuredWorkId={items[0]?.id}
+          featuredTitle={items[0] ? workTitle(items[0], 0) : 'Plate 01'}
           onOpen={() => {
             const first = items[0];
             if (first) goViewer(first.id);

@@ -83,7 +83,7 @@ export function GalleryGrid({ items, tags, filter, onFilter, onOpen }: Props): J
         </div>
         <span className={styles.counter}>{items.length} images</span>
       </div>
-      <div className={styles.masonry}>
+      <div className={styles.grid}>
         {items.map((w, i) => (
           <div
             key={w.id}

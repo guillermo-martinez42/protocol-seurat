@@ -6,7 +6,15 @@ import { useWorkPreview } from '@/entities/work';
 import { HERO_GRID_CELL as CELL, TAU } from '@/shared/config/render';
 import styles from './GalleryHero.module.css';
 
-export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; featuredWorkId?: string }): JSX.Element {
+export function GalleryHero({
+  onOpen,
+  featuredWorkId,
+  featuredTitle = 'Plate 01',
+}: {
+  onOpen: () => void;
+  featuredWorkId?: string;
+  featuredTitle?: string;
+}): JSX.Element {
   const ref = useRef<HTMLCanvasElement>(null);
   const preview = useWorkPreview(featuredWorkId ?? '');
 
@@ -85,10 +93,10 @@ export function GalleryHero({ onOpen, featuredWorkId }: { onOpen: () => void; fe
         <h1 className={styles.title}>Look closer.</h1>
         <p className={styles.description}>Built for massive images. Scroll to zoom, drag to pan — keep zooming in and every pixel becomes a dot.</p>
         <button className="hero-btn">
-          Open Plate 01<Icon name="arrow_forward" size={22} />
+          Open {featuredTitle}<Icon name="arrow_forward" size={22} />
         </button>
       </div>
-      <span className={styles.captionChip}>Plate 01 · one dot per sampled pixel</span>
+      <span className={styles.captionChip}>{featuredTitle} · one dot per sampled pixel</span>
     </section>
   );
 }

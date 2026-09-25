@@ -5,7 +5,7 @@ import { HandleLedgers } from '@/entities/delivery/ledgers';
 import { parseBrushHead, splitBrushId } from '@/shared/proto/brush';
 import { MAX_RETIRED_HANDLES } from '@/shared/config/constants';
 import { clearResume } from '@/entities/session/store';
-import { applyWork } from '@/entities/work/store';
+import { applyWork, sortWorks } from '@/entities/work/store';
 import type { Work } from '@/entities/work/types';
 import type { WorkOpened, Welcome, Concession, PlanMsg, ProtocolError } from '@/shared/proto/messages';
 import { GazeSender } from '@/features/send-gaze';
@@ -61,7 +61,7 @@ export function SeuratProvider({ children }: { children: ReactNode }): JSX.Eleme
       },
       onWork: (m) => {
         worksRef.current = applyWork(worksRef.current, m);
-        const list = [...worksRef.current.values()];
+        const list = sortWorks([...worksRef.current.values()]);
         if (alive) {
           setWorks(list);
           const readyIds = list

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseOpenHash } from '@/features/open-work';
-import { filterWorks, fixtureWorks } from '@/entities/work/store';
+import { filterWorks, fixtureWorks, sortWorks } from '@/entities/work/store';
+import type { Work } from '@/entities/work/types';
 import { buildPresets } from '@/widgets/ZoomMenu';
 import { counterLabel, stepIndex } from '@/features/navigate-work';
 import { fmtPct, logFrac, logUnfrac } from '@/shared/lib/zoom';
@@ -34,6 +35,18 @@ describe('Work filtering & fixtures', () => {
     expect(portraits.length).toBe(4);
     for (const w of landscapes) expect(w.width).toBeGreaterThanOrEqual(w.height);
     for (const w of portraits) expect(w.width).toBeLessThan(w.height);
+  });
+
+  it('sorts works in natural ascending order with numeric collation', () => {
+    const unordered: Work[] = [
+      { id: '3', name: 'Plate 10', width: 100, height: 100, strata: 1, state: 3, edition: 1, progress: 100 },
+      { id: '1', name: 'Plate 2', width: 100, height: 100, strata: 1, state: 3, edition: 1, progress: 100 },
+      { id: '2', name: 'Plate 1', width: 100, height: 100, strata: 1, state: 3, edition: 1, progress: 100 },
+      { id: 'b', name: '', width: 100, height: 100, strata: 1, state: 3, edition: 1, progress: 100 },
+      { id: 'a', name: '', width: 100, height: 100, strata: 1, state: 3, edition: 1, progress: 100 },
+    ];
+    const sorted = sortWorks(unordered);
+    expect(sorted.map((w) => w.name || w.id)).toEqual(['a', 'b', 'Plate 1', 'Plate 2', 'Plate 10']);
   });
 });
 
