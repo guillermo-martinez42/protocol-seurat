@@ -7,8 +7,8 @@ import seurat.kit.TestKit;
 /** Frames: §3.4.1 SALUDO/BIENVENIDA byte-exact, skip/fatal rules, TLV. */
 public final class FrameTest {
     public static void main(String[] args) {
-        saludoGolden();
-        bienvenidaGolden();
+        helloGolden();
+        welcomeGolden();
         unknownOptionalSkipped();
         unknownMandatoryFatal();
         oversizeFatal();
@@ -22,14 +22,14 @@ public final class FrameTest {
         return t;
     }
 
-    private static void saludoGolden() {
-        var saludo = new MsgHandshake.Hello(1, 1, 3, 256, token((byte) 0xAB), null);
-        byte[] payload = saludo.encode();
+    private static void helloGolden() {
+        var hello = new MsgHandshake.Hello(1, 1, 3, 256, token((byte) 0xAB), null);
+        byte[] payload = hello.encode();
         TestKit.check(payload.length == 38, "SALUDO payload 38, got " + payload.length);
         byte[] frame = new Frame(FrameType.SALUDO, payload).encode();
         TestKit.check(frame[0] == 0x01 && frame[1] == 0x26, "SALUDO head 01 26");
         TestKit.check(payload[0] == 0x01 && payload[1] == 0x01 && payload[2] == 0x03,
-                "ver/caps");
+                "minVersion/caps");
         TestKit.check(payload[3] == 0x41 && payload[4] == 0x00, "mem 256");
         TestKit.check(payload[5] == 0x20, "token_len 32");
         Frame back = Frame.decode(ByteBuffer.wrap(frame));
@@ -40,18 +40,18 @@ public final class FrameTest {
                 && Arrays.equals(parsed.token(), token((byte) 0xAB)), "SALUDO fields");
     }
 
-    private static void bienvenidaGolden() {
-        var bienvenida = new MsgHandshake.Welcome(1, 3, 0x3A915E0C77D214B8L, 256,
+    private static void welcomeGolden() {
+        var welcome = new MsgHandshake.Welcome(1, 3, 0x3A915E0C77D214B8L, 256,
                 120, 15, 12, 1024, token((byte) 0x7A), java.util.List.of());
-        byte[] payload = bienvenida.encode();
+        byte[] payload = welcome.encode();
         TestKit.check(payload.length == 52, "BIENVENIDA payload 52, got " + payload.length);
         byte[] frame = new Frame(FrameType.BIENVENIDA, payload).encode();
         TestKit.check(frame[0] == 0x02 && frame[1] == 0x34, "BIENVENIDA head 02 34");
         TestKit.check(payload[0] == 0x01 && payload[1] == 0x03, "version/caps");
-        TestKit.check(payload[10] == 0x41 && payload[11] == 0x00, "lado 256");
-        TestKit.check(payload[12] == 0x40 && payload[13] == 0x78, "arriendo 120");
-        TestKit.check(payload[14] == 0x0F && payload[15] == 0x0C, "latido/max");
-        TestKit.check(payload[16] == 0x44 && payload[17] == 0x00, "sesion_max 1024");
+        TestKit.check(payload[10] == 0x41 && payload[11] == 0x00, "side 256");
+        TestKit.check(payload[12] == 0x40 && payload[13] == 0x78, "lease 120");
+        TestKit.check(payload[14] == 0x0F && payload[15] == 0x0C, "heartbeat/max");
+        TestKit.check(payload[16] == 0x44 && payload[17] == 0x00, "sessionMax 1024");
         TestKit.check(payload[18] == 0x02 && payload[19] == 0x20, "FICHA tag");
     }
 
@@ -77,8 +77,8 @@ public final class FrameTest {
     }
 
     private static void tlvSkip() {
-        var saludo = new MsgHandshake.Hello(1, 1, 3, 256, token((byte) 1), null);
-        byte[] payload = saludo.encode();
+        var hello = new MsgHandshake.Hello(1, 1, 3, 256, token((byte) 1), null);
+        byte[] payload = hello.encode();
         byte[] tag = new Tlv(0x77, new byte[]{9, 9}).encode();
         byte[] glued = new byte[payload.length + tag.length];
         System.arraycopy(payload, 0, glued, 0, payload.length);

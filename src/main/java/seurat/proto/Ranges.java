@@ -85,6 +85,18 @@ public final class Ranges {
         return nums.hashCode();
     }
 
+    @Override
+    public String toString() {
+        StringBuilder b = new StringBuilder("[");
+        for (long[] span : spans()) {
+            if (b.length() > 1) {
+                b.append(',');
+            }
+            b.append(span[0] == span[1] ? Long.toString(span[0]) : span[0] + ".." + span[1]);
+        }
+        return b.append(']').toString();
+    }
+
     /** Builder: add() before build(). */
     public static final class Builder {
         private final TreeSet<Long> acc = new TreeSet<>();

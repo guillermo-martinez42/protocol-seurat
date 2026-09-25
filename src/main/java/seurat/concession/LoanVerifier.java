@@ -36,7 +36,10 @@ final class LoanVerifier {
             var expected = canvas.book().numbersThrough(inventory.through());
             if (!expected.equals(inventory.ranges())) {
                 Log.warn("audit", "Inventory audit mismatch on canvas " + canvas.handle()
-                        + ": expected " + expected + ", got " + inventory.ranges());
+                        + ": order=" + inventory.order() + " through=" + inventory.through()
+                        + " lastNumber=" + canvas.book().lastNumber()
+                        + " pendingOrders=" + canvas.pendingOrders().size()
+                        + " expected " + expected + ", got " + inventory.ranges());
                 throw new FatalProtocol(ProtoCodes.ERR_POSESION,
                         FrameType.INVENTARIO, "POSESION_DISCREPANTE");
             }

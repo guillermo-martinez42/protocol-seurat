@@ -89,9 +89,10 @@ public final class Liveness {
                         new MsgAudit.Renew(canvas.handle(), order,
                                 SeuratConstants.LEASE_S, ranges).encode());
             }
-            long done = canvas.book().lastNumber();
-            if (now - canvas.auditNs > SeuratConstants.AUDIT_S * 1_000_000_000L
-                    || done - canvas.auditBase > SeuratConstants.AUDIT_EVERY_N) {
+            long done = canvas.book().settledThrough();
+            if (canvas.pendingOrders().isEmpty() && done > 0
+                    && (now - canvas.auditNs > SeuratConstants.AUDIT_S * 1_000_000_000L
+                    || done - canvas.auditBase > SeuratConstants.AUDIT_EVERY_N)) {
                 canvas.auditNs = now;
                 canvas.auditBase = done;
                 GrantController.send(session, FrameType.AUDITAR,

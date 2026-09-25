@@ -36,11 +36,11 @@ public final class HttpSurfaceTest {
                 new byte[0], "localhost"));
         TestKit.check(missing.code() == 404, "GET 404");
 
-        var sesion = http.route(new HttpSurface.Request("POST", "/seurat/v1/sesion",
+        var sessionResp = http.route(new HttpSurface.Request("POST", "/seurat/v1/sesion",
                 Map.of("authorization", "Bearer abc"), "{\"memMiB\":256}".getBytes(),
                 "example.edu:8080"));
-        String created = new String(sesion.body());
-        TestKit.check(sesion.code() == 201 && created.contains("\"token\":\"")
+        String created = new String(sessionResp.body());
+        TestKit.check(sessionResp.code() == 201 && created.contains("\"token\":\"")
                 && created.contains("/seurat/v1/lienzo-ws"), "POST /sesion issues");
         String token = created.split("\"token\":\"")[1].split("\"")[0];
         TestKit.check(sessions.consumeToken(token) != null, "token single-use valid");

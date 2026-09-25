@@ -64,10 +64,10 @@ public final class WsMapping implements Mapping {
     }
 
     @Override
-    public synchronized void sendControl(byte[] trama) throws IOException {
-        byte[] msg = new byte[trama.length + 1];
+    public synchronized void sendControl(byte[] frame) throws IOException {
+        byte[] msg = new byte[frame.length + 1];
         msg[0] = 0;
-        System.arraycopy(trama, 0, msg, 1, trama.length);
+        System.arraycopy(frame, 0, msg, 1, frame.length);
         synchronized (out) {
             WsFraming.write(out, 0x2, msg);
         }

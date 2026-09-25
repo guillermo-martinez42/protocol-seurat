@@ -65,6 +65,7 @@ final class CanvasService {
             long leaseNs = SeuratConstants.LEASE_S * 1_000_000_000L;
             long skewNs = SeuratConstants.SKEW_MS * 1_000_000L;
             canvas.book().acknowledge(receipt.completed(), now, leaseNs, skewNs);
+            canvas.book().settle(receipt.completed());
             if (receipt.renewThrough() > 0) {
                 canvas.acknowledgeRenewal(receipt.renewThrough(), now, leaseNs, skewNs);
             }

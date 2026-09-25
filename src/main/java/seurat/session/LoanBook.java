@@ -1,7 +1,9 @@
 package seurat.session;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import seurat.codec.BrushId;
 import seurat.config.SeuratConstants;
@@ -15,6 +17,7 @@ public final class LoanBook {
     private final TreeMap<Long, Delivery> deliveries = new TreeMap<>();
     private final Map<BrushId, TreeMap<Integer, Delivery>> byBrush = new HashMap<>();
     private final Map<Long, Long> deadlineNs = new HashMap<>();
+    private final Set<Long> settled = new HashSet<>();
     private long last;
 
     public synchronized long lastNumber() {
@@ -48,6 +51,25 @@ public final class LoanBook {
 
     public synchronized void acknowledge(Ranges r, long ahoraNs, long arriendoNs, long deltaNs) {
         r.forEach(n -> deadlineNs.put(n, ahoraNs + arriendoNs + deltaNs));
+    }
+
+    /** Client confirmed synthesis via RECIBO: safe to audit through it. */
+    public synchronized void settle(Ranges r) {
+        r.forEach(settled::add);
+    }
+
+    /**
+     * Highest N such that every book entry ≤ N is client-confirmed (RECIBO).
+     * Unsettled (in-flight or unsynthesized) deliveries block the watermark,
+     * so an audit never counts a number the client may not hold yet.
+     */
+    public synchronized long settledThrough() {
+        for (long n : deliveries.keySet()) {
+            if (!settled.contains(n)) {
+                return n - 1;
+            }
+        }
+        return last;
     }
 
     public synchronized void release(Ranges r) {
@@ -107,6 +129,7 @@ public final class LoanBook {
             return;
         }
         deadlineNs.remove(n);
+        settled.remove(n);
         TreeMap<Integer, Delivery> group = byBrush.get(e.brush());
         if (group != null) {
             group.remove(e.from());

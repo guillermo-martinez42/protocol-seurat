@@ -49,6 +49,9 @@ public final class Easel implements Runnable {
             session = new SessionHandshake(mapping, entry, sessions, sessionMax).hello();
             service = new CanvasService(mapping, catalog, control, sessionMax);
             loop(session);
+        } catch (java.io.EOFException ex) {
+            Log.info("session", "Session " + (session == null ? "?" : session.id())
+                    + " client disconnected (EOF)");
         } catch (FatalProtocol fail) {
             Log.warn("session", "Fatal protocol error [session " + (session == null ? "?" : session.id())
                     + "]: " + ProtoCodes.errorName(fail.code) + " (ref=" + FrameType.name(fail.refType)

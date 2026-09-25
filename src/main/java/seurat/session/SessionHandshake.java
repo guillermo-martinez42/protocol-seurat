@@ -101,6 +101,7 @@ final class SessionHandshake {
         for (var entry : grave.session().canvases().entrySet()) {
             entry.getValue().session(session);
             session.canvases().put(entry.getKey(), entry.getValue());
+            session.claimHandle(entry.getKey());
             resumed.add(entry.getKey());
         }
         Log.info("session", "Session " + session.id() + " resumed " + resumed.size() + " canvas(es)");

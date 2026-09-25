@@ -82,12 +82,12 @@ public final class WsLoopbackTest {
             Frame welcome = readControl(in);
             TestKit.check(welcome.type() == FrameType.BIENVENIDA, "BIENVENIDA");
             sendWs(out, 0, new Frame(FrameType.CATALOGO, new byte[0]).encode());
-            Frame obra = readControl(in);
-            TestKit.check(obra.type() == FrameType.OBRA, "OBRA listing, got " + obra.type());
+            Frame work = readControl(in);
+            TestKit.check(work.type() == FrameType.OBRA, "OBRA listing, got " + work.type());
             sendWs(out, 0, frame(FrameType.ABRIR, openWork("loop")));
-            Frame abierta = readControl(in);
-            TestKit.check(abierta.type() == FrameType.ABIERTA, "ABIERTA");
-            var openedMeta = MsgCatalog.WorkOpened.parse(abierta.payload());
+            Frame opened = readControl(in);
+            TestKit.check(opened.type() == FrameType.ABIERTA, "ABIERTA");
+            var openedMeta = MsgCatalog.WorkOpened.parse(opened.payload());
             TestKit.check(openedMeta.width() == 2048 && openedMeta.edition() == 2,
                     "ABIERTA dims/edition");
             Frame concession = readControl(in);
@@ -113,7 +113,7 @@ public final class WsLoopbackTest {
             if (responseFrame.type() == FrameType.CONCESION) {
                 responseFrame = readControl(in);
             }
-            TestKit.check(responseFrame.type() == FrameType.PLAN, "PLAN response to canal 2 MIRADA");
+            TestKit.check(responseFrame.type() == FrameType.PLAN, "PLAN response to channel 2 MIRADA");
         }
         System.out.println("WsLoopbackTest OK");
     }
@@ -191,9 +191,9 @@ public final class WsLoopbackTest {
         return new Frame(type, payload).encode();
     }
 
-    private static void sendWs(OutputStream out, int canal, byte[] frame) throws Exception {
+    private static void sendWs(OutputStream out, int channel, byte[] frame) throws Exception {
         byte[] message = new byte[frame.length + 1];
-        message[0] = (byte) canal;
+        message[0] = (byte) channel;
         System.arraycopy(frame, 0, message, 1, frame.length);
         byte[] mask = {1, 2, 3, 4};
         for (int i = 0; i < message.length; i++) {

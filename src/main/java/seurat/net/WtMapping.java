@@ -13,12 +13,12 @@ import seurat.session.Canvas;
 public final class WtMapping implements Mapping {
     @Override
     public OutputStream openDelivery(Canvas canvas, Delivery e) throws IOException {
-        throw new IOException("webtransport no disponible (Hito 0 pendiente)");
+        throw new IOException("webtransport unavailable (Hito 0 pending)");
     }
 
     @Override
-    public void sendControl(byte[] trama) throws IOException {
-        throw new IOException("webtransport no disponible (Hito 0 pendiente)");
+    public void sendControl(byte[] frame) throws IOException {
+        throw new IOException("webtransport unavailable (Hito 0 pending)");
     }
 
     @Override

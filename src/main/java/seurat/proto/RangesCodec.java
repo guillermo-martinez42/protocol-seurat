@@ -39,16 +39,16 @@ public final class RangesCodec {
             VarInt.get(b); // primer_rango (0)
             return out.build();
         }
-        long huecos = VarInt.get(b);
+        long gaps = VarInt.get(b);
         long first = VarInt.get(b);
         out.addRange(largest - first, largest);
-        long menor = largest - first;
-        for (long i = 0; i < huecos; i++) {
-            long hueco = VarInt.get(b);
-            long largo = VarInt.get(b);
-            long hi = menor - hueco - 2;
-            out.addRange(hi - largo, hi);
-            menor = hi - largo;
+        long lowest = largest - first;
+        for (long i = 0; i < gaps; i++) {
+            long gap = VarInt.get(b);
+            long length = VarInt.get(b);
+            long hi = lowest - gap - 2;
+            out.addRange(hi - length, hi);
+            lowest = hi - length;
         }
         return out.build();
     }

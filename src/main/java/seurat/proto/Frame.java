@@ -3,7 +3,7 @@ package seurat.proto;
 import java.nio.ByteBuffer;
 import seurat.config.SeuratConstants;
 
-/** Control frame: type/largo/payload. >64KiB is fail. */
+/** Control frame: type/length/payload. >64KiB is fail. */
 public record Frame(long type, byte[] payload) {
     public byte[] encode() {
         byte[] t = VarInt.encode(type);
@@ -17,11 +17,11 @@ public record Frame(long type, byte[] payload) {
 
     public static Frame decode(ByteBuffer b) {
         long type = VarInt.get(b);
-        long largo = VarInt.get(b);
-        if (largo > SeuratConstants.FRAME_MAX) {
+        long length = VarInt.get(b);
+        if (length > SeuratConstants.FRAME_MAX) {
             throw new FatalProtocol(1, type, "trama >64KiB");
         }
-        byte[] payload = new byte[(int) largo];
+        byte[] payload = new byte[(int) length];
         b.get(payload);
         return new Frame(type, payload);
     }

@@ -11,7 +11,7 @@ public interface Mapping {
     OutputStream openDelivery(Canvas canvas, Delivery e) throws IOException;
 
     /** Sends one control frame (WT: client bidi; WS: channel 0). */
-    void sendControl(byte[] trama) throws IOException;
+    void sendControl(byte[] frame) throws IOException;
 
     /** Cancels a delivery (WT: RESET_STREAM; WS: best effort pre-write). */
     void cancel(long delivery);

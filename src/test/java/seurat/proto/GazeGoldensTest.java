@@ -6,16 +6,16 @@ import seurat.kit.TestKit;
 /** §3.4.2 goldens: MIRADA, CONCESION e2, PLAN INICIO, PINCELADA e64, RECIBO. */
 public final class GazeGoldensTest {
     public static void main(String[] args) {
-        miradaDatagram();
-        miradaControl();
-        concesion();
-        planInicio();
-        pincelada();
-        recibo();
+        gazeDatagram();
+        gazeControl();
+        concession();
+        planStart();
+        brushHead();
+        receipt();
         System.out.println("GazeGoldensTest OK");
     }
 
-    private static void miradaDatagram() {
+    private static void gazeDatagram() {
         var gaze = new MsgGaze.Gaze(1, 8, 65536, 49152, 69376, 51312, 1920, 1080, 0);
         byte[] payload = gaze.encode();
         TestKit.check(payload.length == 23, "MIRADA 23B payload, got " + payload.length);
@@ -31,22 +31,22 @@ public final class GazeGoldensTest {
                 && back.vh() == 1080 && back.seq() == 8, "MIRADA fields");
     }
 
-    private static void miradaControl() {
+    private static void gazeControl() {
         var gaze = new MsgGaze.Gaze(1, 9, 65536, 49152, 69376, 51312, 1920, 1080, 2);
         byte[] frame = new Frame(FrameType.MIRADA, gaze.encode()).encode();
         TestKit.check(frame[0] == 0x20 && frame[1] == 0x17, "MIRADA head 20 17");
         TestKit.check(frame[frame.length - 1] == 0x02, "QUIETA flag");
     }
 
-    private static void concesion() {
-        var concession = new MsgGaze.ConcessionMessage(1, 2, 0, 2, 1, 768, 36864, 120);
-        byte[] frame = new Frame(FrameType.CONCESION, concession.encode()).encode();
+    private static void concession() {
+        var concessionMsg = new MsgGaze.ConcessionMessage(1, 2, 0, 2, 1, 768, 36864, 120);
+        byte[] frame = new Frame(FrameType.CONCESION, concessionMsg.encode()).encode();
         byte[] expect = TestKit.unhex("210d01020002014300800090004078");
         TestKit.check(java.util.Arrays.equals(frame, expect), "CONCESION e2:\n"
                 + TestKit.hex(frame));
     }
 
-    private static void planInicio() {
+    private static void planStart() {
         var plan = MsgGaze.Plan.start(1, 8, 45, 212, 0);
         byte[] frame = new Frame(FrameType.PLAN, plan.encode()).encode();
         byte[] expect = TestKit.unhex("23070108002d40d400");
@@ -54,7 +54,7 @@ public final class GazeGoldensTest {
                 + TestKit.hex(frame));
     }
 
-    private static void pincelada() {
+    private static void brushHead() {
         var head = new Headers.BrushHead(1, 64, 0x010000000000680DL, 0, 2, 2, 4, 6,
                 2, new long[]{0x647CBE67L, 0x07629C02L}, new long[]{6496, 5873});
         byte[] bytes = head.encode();
@@ -69,10 +69,10 @@ public final class GazeGoldensTest {
                 "PINCELADA lengths");
     }
 
-    private static void recibo() {
+    private static void receipt() {
         var ranges = Ranges.decode(ByteBuffer.wrap(TestKit.unhex("3c01070006")));
-        var receipt = new MsgLoans.Receipt(1, ranges, 40, 708, 0);
-        byte[] frame = new Frame(FrameType.RECIBO, receipt.encode()).encode();
+        var receiptMsg = new MsgLoans.Receipt(1, ranges, 40, 708, 0);
+        byte[] frame = new Frame(FrameType.RECIBO, receiptMsg.encode()).encode();
         byte[] expect = TestKit.unhex("260a013c010700062842c400");
         TestKit.check(java.util.Arrays.equals(frame, expect), "RECIBO:\n"
                 + TestKit.hex(frame));

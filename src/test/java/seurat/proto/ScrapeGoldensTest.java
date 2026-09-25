@@ -7,23 +7,23 @@ import seurat.kit.TestKit;
 /** §3.4.3 scrape + §3.4.4 renew/resume goldens. */
 public final class ScrapeGoldensTest {
     public static void main(String[] args) {
-        concesionE3();
-        planCanceladas();
-        raspar();
-        raspado();
-        renovar();
-        reanudar();
+        concessionE3();
+        planCancelled();
+        scrape();
+        scraped();
+        renew();
+        resume();
         System.out.println("ScrapeGoldensTest OK");
     }
 
-    private static void concesionE3() {
-        var concession = new MsgGaze.ConcessionMessage(1, 3, 1, 4, 2, 768, 36864, 120);
-        byte[] frame = new Frame(FrameType.CONCESION, concession.encode()).encode();
+    private static void concessionE3() {
+        var concessionMsg = new MsgGaze.ConcessionMessage(1, 3, 1, 4, 2, 768, 36864, 120);
+        byte[] frame = new Frame(FrameType.CONCESION, concessionMsg.encode()).encode();
         byte[] expect = TestKit.unhex("210d01030104024300800090004078");
         TestKit.check(Arrays.equals(frame, expect), "CONCESION e3:\n" + TestKit.hex(frame));
     }
 
-    private static void planCanceladas() {
+    private static void planCancelled() {
         var ranges = Ranges.decode(ByteBuffer.wrap(TestKit.unhex("41210004")));
         var plan = MsgGaze.Plan.cancelled(1, 12, ranges);
         byte[] frame = new Frame(FrameType.PLAN, plan.encode()).encode();
@@ -33,17 +33,17 @@ public final class ScrapeGoldensTest {
                 && !ranges.contains(284), "[285,289]");
     }
 
-    private static void raspar() {
-        var scrape = MsgLoans.Scrape.lowStratum(1, 3, 3, 289, 1);
-        byte[] frame = new Frame(FrameType.RASPAR, scrape.encode()).encode();
+    private static void scrape() {
+        var scrapeMsg = MsgLoans.Scrape.lowStratum(1, 3, 3, 289, 1);
+        byte[] frame = new Frame(FrameType.RASPAR, scrapeMsg.encode()).encode();
         byte[] expect = TestKit.unhex("240701030341210101");
         TestKit.check(Arrays.equals(frame, expect), "RASPAR:\n" + TestKit.hex(frame));
     }
 
-    private static void raspado() {
+    private static void scraped() {
         var kept = Ranges.decode(ByteBuffer.wrap(TestKit.unhex("41000040ff")));
-        var scraped = new MsgLoans.Scraped(1, 3, 3, 289, 28, 216, kept);
-        byte[] frame = new Frame(FrameType.RASPADO, scraped.encode()).encode();
+        var scrapedMsg = new MsgLoans.Scraped(1, 3, 3, 289, 28, 216, kept);
+        byte[] frame = new Frame(FrameType.RASPADO, scrapedMsg.encode()).encode();
         byte[] expect = TestKit.unhex("250d01030341211c40d841000040ff");
         TestKit.check(Arrays.equals(frame, expect), "RASPADO:\n" + TestKit.hex(frame));
         var back = MsgLoans.Scraped.parse(
@@ -52,24 +52,24 @@ public final class ScrapeGoldensTest {
                 && back.kept().size() == 256, "RASPADO fields");
     }
 
-    private static void renovar() {
+    private static void renew() {
         var ranges = Ranges.decode(ByteBuffer.wrap(TestKit.unhex("4150012e2040ff")));
-        var renew = new MsgAudit.Renew(1, 12, 120, ranges);
-        byte[] frame = new Frame(FrameType.RENOVAR, renew.encode()).encode();
+        var renewMsg = new MsgAudit.Renew(1, 12, 120, ranges);
+        byte[] frame = new Frame(FrameType.RENOVAR, renewMsg.encode()).encode();
         byte[] expect = TestKit.unhex("280b010c40784150012e2040ff");
         TestKit.check(Arrays.equals(frame, expect), "RENOVAR:\n" + TestKit.hex(frame));
     }
 
-    private static void reanudar() {
+    private static void resume() {
         byte[] token = new byte[32];
         Arrays.fill(token, (byte) 0xD5);
         byte[] ticket = new byte[32];
         Arrays.fill(ticket, (byte) 0x7A);
         var claim = new MsgHandshake.Claim(1,
                 Ranges.decode(ByteBuffer.wrap(TestKit.unhex("4150012e2040ff"))));
-        var resume = new MsgHandshake.ResumeRequest(0x3A915E0C77D214B8L, ticket,
+        var resumeReq = new MsgHandshake.ResumeRequest(0x3A915E0C77D214B8L, ticket,
                 java.util.List.of(claim));
-        var hello = new MsgHandshake.Hello(1, 1, 3, 256, token, resume);
+        var hello = new MsgHandshake.Hello(1, 1, 3, 256, token, resumeReq);
         byte[] payload = hello.encode();
         TestKit.check(payload.length == 89, "REANUDAR payload 89, got " + payload.length);
         byte[] frame = new Frame(FrameType.SALUDO, payload).encode();

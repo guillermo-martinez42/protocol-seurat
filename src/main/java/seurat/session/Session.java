@@ -84,6 +84,11 @@ public final class Session {
         return nextHandle.incrementAndGet();
     }
 
+    /** Adopted canvases must not be reused by later ABRIR (resume safety). */
+    public void claimHandle(long handle) {
+        nextHandle.accumulateAndGet(handle, Math::max);
+    }
+
     public boolean takeSlot() {
         if (!slots.tryAcquire()) {
             return false;
