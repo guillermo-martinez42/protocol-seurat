@@ -24,14 +24,22 @@ final class WorkRecovery {
                 if (dir.getFileName().toString().equals("ed1")) continue;
                 String defaultId = worksDir.relativize(dir).toString().replace('\\', '/');
                 var info = MetaJson.read(defaultId, Files.readString(meta));
+                String normId = normalize(info.id());
+                if (!info.id().equals(normId) && found.containsKey(normId)) {
+                    continue;
+                }
                 WorkRecord work = new WorkRecord(info);
                 if (info.strata() > 0 && readyState(info.state())) {
                     attachStore(dir, info, work);
                 }
-                found.put(info.id(), work);
+                found.put(normId, work);
             }
         }
         return found;
+    }
+
+    private static String normalize(String id) {
+        return id.replaceAll("(?i)\\.(png|jpg|jpeg|tif|tiff)$", "");
     }
 
     private static void attachStore(Path dir, seurat.store.WorkMeta info, WorkRecord work)

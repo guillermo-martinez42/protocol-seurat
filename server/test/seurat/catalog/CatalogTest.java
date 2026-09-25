@@ -46,11 +46,14 @@ public final class CatalogTest {
         catalog.register(new WorkRecord(m0));
         WorkMeta m1 = new WorkMeta("w1", "W1", 512, 512, 256, 2, ProtoCodes.ST_LISTA, 1, 0, 2);
         catalog.register(new WorkRecord(m1));
+        WorkMeta m1dup = new WorkMeta("w1.png", "W1", 512, 512, 256, 2, ProtoCodes.ST_LISTA, 1, 0, 2);
+        catalog.register(new WorkRecord(m1dup));
 
         Catalog loaded = new Catalog(root);
         loaded.load();
         TestKit.check(loaded.get("r0") != null, "loaded r0");
         TestKit.check(loaded.get("r0").store == null, "r0 has no store");
         TestKit.check(loaded.get("w1") != null, "loaded w1");
+        TestKit.check(loaded.get("w1.png") == null, "w1.png deduplicated");
     }
 }
