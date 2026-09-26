@@ -220,11 +220,24 @@ export class DeliverySink {
     const parentId = isCoarsest
       ? makeBrushId(10, 0, 0)
       : makeBrushId(stratum + 1, bx >> 1, by >> 1);
-    // Synthesized first, then the newest: it decoded the most of its brush's bands.
-    return [...this.book.byDelivery.values()]
-      .filter((rec) => rec.brushId === parentId && (edition === undefined || rec.edition === edition))
-      .filter((rec) => epoch === undefined || rec.epoch <= epoch)
-      .sort((a, b) => b.epoch - a.epoch || Number(b.planes != null) - Number(a.planes != null) || b.delivery - a.delivery)[0] ?? null;
+    let best: DeliveryRecord | null = null;
+    for (const rec of this.book.byDelivery.values()) {
+      if (rec.brushId !== parentId) continue;
+      if (edition !== undefined && rec.edition !== edition) continue;
+      if (epoch !== undefined && rec.epoch > epoch) continue;
+      if (best === null) {
+        best = rec;
+        continue;
+      }
+      const diff =
+        (rec.epoch - best.epoch) ||
+        (Number(rec.planes != null) - Number(best.planes != null)) ||
+        (rec.delivery - best.delivery);
+      if (diff > 0) {
+        best = rec;
+      }
+    }
+    return best;
   }
 
   /** Each delivery of a brush carries some of its bands (disjoint masks): synthesis decodes them all. */
@@ -233,7 +246,11 @@ export class DeliverySink {
   }
 
   private sameBrush(rec: DeliveryRecord): DeliveryRecord[] {
-    return [...this.book.byDelivery.values()].filter((r) => r.brushId === rec.brushId && r.edition === rec.edition);
+    const out: DeliveryRecord[] = [];
+    for (const r of this.book.byDelivery.values()) {
+      if (r.brushId === rec.brushId && r.edition === rec.edition) out.push(r);
+    }
+    return out;
   }
 
   private withParent(req: SynthRequest, parent: DeliveryRecord, bx: number, by: number): void {
