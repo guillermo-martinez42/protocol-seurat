@@ -120,8 +120,8 @@ export function samplePixelHex(
     const b = brushes[i];
     if (!b) continue;
     if (ix >= b.x && ix < b.x + b.w && iy >= b.y && iy < b.y + b.h) {
-      scratch.width = 1;
-      scratch.height = 1;
+      if (scratch.width !== 1) scratch.width = 1;
+      if (scratch.height !== 1) scratch.height = 1;
       const ctx = scratch.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
       ctx.imageSmoothingEnabled = false;

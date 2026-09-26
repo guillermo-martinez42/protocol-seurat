@@ -115,6 +115,8 @@ export function ViewerChrome(props: Props): JSX.Element {
     scratchCanvas: document.createElement('canvas'),
     loupeCanvas: document.createElement('canvas'),
     scratch1x1: document.createElement('canvas'),
+    cachedTick: -1,
+    cachedBrushes: [] as BrushGeom[],
   });
   const propsRef = useRef(props);
   propsRef.current = props;
@@ -196,11 +198,15 @@ export function ViewerChrome(props: Props): JSX.Element {
     };
 
     function brushes(): BrushGeom[] {
-      const sink = P().sink;
+      const p = P();
+      const sink = p.sink;
       if (!sink) return [];
+      if (st.cachedTick === p.paintTick) {
+        return st.cachedBrushes;
+      }
       const out: BrushGeom[] = [];
-      const iw = P().iw;
-      const ih = P().ih;
+      const iw = p.iw;
+      const ih = p.ih;
       for (const rec of sink.book.byDelivery.values()) {
         if (!rec.rgba) continue;
         const { stratum, bx, by } = splitBrushId(rec.brushId);
@@ -212,6 +218,8 @@ export function ViewerChrome(props: Props): JSX.Element {
         }
       }
       out.sort((a, b) => b.stratum - a.stratum);
+      st.cachedTick = p.paintTick;
+      st.cachedBrushes = out;
       return out;
     }
 
