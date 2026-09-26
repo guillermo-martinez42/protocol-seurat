@@ -67,10 +67,16 @@ public final class MasterIntake {
                     return;
                 }
                 Log.info("ingest", "Ingesting " + imgs.size() + " work(s) from " + file.getFileName());
+                long batchStart = System.currentTimeMillis();
                 for (Path img : imgs) {
                     String name = img.getFileName().toString().replaceAll("\\.[^.]+$", "");
                     new IngestJob(name, name, img, config.works, catalog,
                             () -> substitute(name)).run();
+                }
+                if (imgs.size() > 1) {
+                    long batchElapsed = System.currentTimeMillis() - batchStart;
+                    Log.info("ingest", "Batch preprocessing for " + file.getFileName()
+                            + " completed in " + IngestJob.formatDuration(batchElapsed));
                 }
                 return;
             }

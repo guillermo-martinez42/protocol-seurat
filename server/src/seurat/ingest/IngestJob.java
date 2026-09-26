@@ -2,6 +2,7 @@ package seurat.ingest;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import seurat.catalog.Catalog;
 import seurat.catalog.WorkRecord;
 import seurat.codec.Quant;
@@ -41,6 +42,7 @@ public final class IngestJob implements Runnable {
                 Log.info("ingest", "Work already completed, skipping: " + id);
                 return;
             }
+            long start = System.currentTimeMillis();
             Log.info("ingest", "Ingest started for '" + id + "' [" + name + "] from " + master.getFileName());
             catalog.register(new WorkRecord(new WorkMeta(id, name, 0, 0, 256, 0,
                     ProtoCodes.ST_RECIBIENDO, 1, 0, 2)));
@@ -57,7 +59,9 @@ public final class IngestJob implements Runnable {
                 ed2.close();
                 catalog.sketch(id, ed2, ProtoCodes.ST_LISTA, 2);
                 catalog.list(id);
+                long elapsed = System.currentTimeMillis() - start;
                 Log.info("ingest", "Work '" + id + "' ed2 pyramid completed, work ready (ST_LISTA)");
+                Log.info("ingest", "Preprocessing for '" + id + "' completed in " + formatDuration(elapsed));
             }
             onReady.run();
         } catch (Throwable ex) { // OutOfMemoryError included: never leave a work stuck mid-pass
@@ -71,6 +75,14 @@ public final class IngestJob implements Runnable {
                 catalog.sketch(id, work.store, ProtoCodes.ST_FALLIDA, work.meta.edition());
             }
         }
+    }
+
+    public static String formatDuration(long millis) {
+        Duration d = Duration.ofMillis(Math.max(0, millis));
+        long m = d.toMinutes();
+        int s = d.toSecondsPart();
+        int ms = d.toMillisPart();
+        return m + "m " + s + "s " + ms + "ms";
     }
 
     public static int topLevels(int w, int h) {
