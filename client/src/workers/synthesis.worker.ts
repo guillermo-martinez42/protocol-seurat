@@ -25,23 +25,6 @@ function deq(i: number, q: number): number {
   return s * (Math.abs(i) * q + Math.floor(q / 2));
 }
 
-function invBlock(s: number, h: number, v: number, d: number): [number, number, number, number] {
-  const l1 = s + ((v + 1) >> 1);
-  const l2 = l1 - v;
-  const h1 = h + ((d + 1) >> 1);
-  const h2 = h1 - d;
-  const a = l1 + ((h1 + 1) >> 1);
-  const b = a - h1;
-  const c = l2 + ((h2 + 1) >> 1);
-  return [a, b, c, c - h2];
-}
-
-function ycocgInv(y: number, co: number, cg: number): [number, number, number] {
-  const t = y - (cg >> 1);
-  const g = cg + t;
-  const b = t - (co >> 1);
-  return [b + co, g, b];
-}
 
 function loadParentPlanes(req: SynthRequest, parentPlanes: Record<'Y' | 'Co' | 'Cg', Int16Array>): void {
   if (!req.parentPlanes) return;
@@ -135,10 +118,14 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
       const n = 16384;
       const nch = req.qC > 0 ? 3 : 1;
       const chNames = ['Y', 'Co', 'Cg'] as const;
-      const details: number[][][] = [
-        [new Array(n).fill(0), new Array(n).fill(0), new Array(n).fill(0)],
-        [new Array(n).fill(0), new Array(n).fill(0), new Array(n).fill(0)],
-        [new Array(n).fill(0), new Array(n).fill(0), new Array(n).fill(0)],
+      const details: [
+        [Int32Array, Int32Array, Int32Array],
+        [Int32Array, Int32Array, Int32Array],
+        [Int32Array, Int32Array, Int32Array],
+      ] = [
+        [new Int32Array(n), new Int32Array(n), new Int32Array(n)],
+        [new Int32Array(n), new Int32Array(n), new Int32Array(n)],
+        [new Int32Array(n), new Int32Array(n), new Int32Array(n)],
       ];
 
       for (let b = 0; b < req.bands.length; b++) {
@@ -146,18 +133,16 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
         if (!bandBytes || bandBytes.byteLength === 0) continue;
         const raw = await inflateRaw(new Uint8Array(bandBytes));
         let p = 0;
-        const mask = new Uint8Array(n);
-        for (let i = 0; i < n; i += 8) {
-          const by = raw[p++] ?? 0;
-          for (let k = 0; k < 8 && i + k < n; k++) mask[i + k] = (by >> k) & 1;
-        }
+        const maskOffset = p;
+        p += (n >> 3);
         for (let c = 0; c < nch; c++) {
           const qq = c === 0 ? req.qY : req.qC;
           for (let det = 0; det < 3; det++) {
             const cur = details[c]?.[det];
             if (!cur) continue;
             for (let i = 0; i < n; i++) {
-              if (mask[i] === 1) {
+              const maskByte = raw[maskOffset + (i >> 3)] ?? 0;
+              if (((maskByte >> (i & 7)) & 1) === 1) {
                 const r = uleb(raw, p);
                 p = r.n;
                 cur[i] = deq(zz(r.v), qq);
@@ -188,11 +173,20 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
             const vVal = (vVals?.[idx] ?? 0) + vHat;
             const dVal = dVals?.[idx] ?? 0;
             const parent = p[idx] ?? 0;
-            const [a, b, cc, dd] = invBlock(parent, hVal, vVal, dVal);
-            pl[(2 * py) * 256 + 2 * pxCoord] = a;
-            pl[(2 * py) * 256 + 2 * pxCoord + 1] = b;
-            pl[(2 * py + 1) * 256 + 2 * pxCoord] = cc;
-            pl[(2 * py + 1) * 256 + 2 * pxCoord + 1] = dd;
+            const l1 = parent + ((vVal + 1) >> 1);
+            const l2 = l1 - vVal;
+            const h1 = hVal + ((dVal + 1) >> 1);
+            const h2 = h1 - dVal;
+            const a = l1 + ((h1 + 1) >> 1);
+            const b = a - h1;
+            const cc = l2 + ((h2 + 1) >> 1);
+            const dd = cc - h2;
+            const row0 = (2 * py) * 256 + 2 * pxCoord;
+            const row1 = (2 * py + 1) * 256 + 2 * pxCoord;
+            pl[row0] = a;
+            pl[row0 + 1] = b;
+            pl[row1] = cc;
+            pl[row1 + 1] = dd;
           }
         }
       }
@@ -203,11 +197,14 @@ self.onmessage = async (ev: MessageEvent<SynthRequest>) => {
       const y = planes.Y[i] ?? 0;
       const co = planes.Co[i] ?? 0;
       const cg = planes.Cg[i] ?? 0;
-      const [r, g, b] = ycocgInv(y, co, cg);
-      rgba[i * 4] = Math.max(0, Math.min(255, r));
-      rgba[i * 4 + 1] = Math.max(0, Math.min(255, g));
-      rgba[i * 4 + 2] = Math.max(0, Math.min(255, b));
-      rgba[i * 4 + 3] = 255;
+      const t = y - (cg >> 1);
+      const g = cg + t;
+      const b = t - (co >> 1);
+      const off = i * 4;
+      rgba[off] = b + co;
+      rgba[off + 1] = g;
+      rgba[off + 2] = b;
+      rgba[off + 3] = 255;
     }
 
     const out: SynthResult = {
